@@ -4,7 +4,7 @@
 import type { ClipItem } from '../types';
 
 export interface ContextMenuActions {
-  onPasteCopy(item: ClipItem): void;
+  onCopy(item: ClipItem): void;
   onPinToggle(item: ClipItem): void;
   onDelete(item: ClipItem): void;
 }
@@ -54,7 +54,7 @@ export function createContextMenu(root: HTMLElement, actions: ContextMenuActions
     close();
     switch (target.dataset.act) {
       case 'paste':
-        actions.onPasteCopy(item);
+        actions.onCopy(item);
         break;
       case 'pin':
         actions.onPinToggle(item);

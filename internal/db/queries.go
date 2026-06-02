@@ -157,10 +157,15 @@ func (s *Store) SetPinned(id int64, pinned bool) error {
 	return err
 }
 
-// Delete removes a single row by id.
-func (s *Store) Delete(id int64) error {
+// Delete removes a single row by id and returns the deleted row's content
+// hash (empty if the row didn't exist). The caller can use the hash to
+// suppress the watcher so a deleted item still sitting on the clipboard
+// isn't immediately re-ingested.
+func (s *Store) Delete(id int64) (string, error) {
+	var hash string
+	_ = s.db.QueryRow(`SELECT content_hash FROM items WHERE id = ?`, id).Scan(&hash)
 	_, err := s.db.Exec(`DELETE FROM items WHERE id = ?`, id)
-	return err
+	return hash, err
 }
 
 // ClearAll removes all rows. When keepPinned is true, pinned items are

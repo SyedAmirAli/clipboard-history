@@ -6,6 +6,7 @@
 // the "Mod+Mod+Key" string the Go-side parser expects.
 
 import type { AppSettings, SystemInfo } from '../types';
+import type { ConfirmDialog } from './confirmModal';
 
 export interface SettingsChrome {
   scrim: HTMLElement;
@@ -18,6 +19,7 @@ export interface SettingsModalDeps {
   clearAll: (keepPinned: boolean) => Promise<void>;
   systemInfo: () => Promise<SystemInfo>;
   chrome: SettingsChrome;
+  confirm: ConfirmDialog;
 }
 
 export interface SettingsModal {
@@ -56,9 +58,11 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
     close();
   };
 
-  // Escape closes the overlay (captured before main.ts sees it).
+  // Escape closes the overlay (captured before main.ts sees it). If a
+  // confirm dialog is layered on top, let it handle Escape itself.
   const escHandler = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && isOpen()) {
+      if (deps.confirm.isOpen()) return;
       e.stopPropagation();
       e.preventDefault();
       cancel();
@@ -276,7 +280,14 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
     root.querySelector<HTMLButtonElement>('[data-action="cancel"]')!.addEventListener('click', cancel);
 
     root.querySelector<HTMLButtonElement>('[data-action="clear-all"]')!.addEventListener('click', async () => {
-      if (!confirm('Clear all clipboard history? Pinned items will be kept.')) return;
+      const ok = await deps.confirm.show({
+        title: 'Clear clipboard history?',
+        message: 'All unpinned items will be permanently removed. Pinned items are kept.',
+        confirmLabel: 'Clear history',
+        cancelLabel: 'Cancel',
+        danger: true,
+      });
+      if (!ok) return;
       await deps.clearAll(true);
     });
 

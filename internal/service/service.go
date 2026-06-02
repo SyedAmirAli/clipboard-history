@@ -140,28 +140,39 @@ func (s *Service) ListItems(filter string, limit int) ([]clipboard.Item, error) 
 	return items, nil
 }
 
-// PasteItem writes the stored item back onto the X11 CLIPBOARD selection
-// and hides the popup window so the user can immediately Ctrl+V.
-func (s *Service) PasteItem(id int64) error {
+// writeToClipboard puts a stored item onto the X11 CLIPBOARD selection,
+// suppressing the watcher so our own write isn't re-ingested as a new entry.
+func (s *Service) writeToClipboard(id int64) error {
 	ct, text, blob, err := s.store.GetForPaste(id)
 	if err != nil {
 		return err
 	}
 	switch ct {
 	case clipboard.ContentTypeText:
-		h := "t:" + sumHex([]byte(text))
-		s.suppressor.Suppress(h)
-		if err := clipboard.WriteText(text); err != nil {
-			return err
-		}
+		s.suppressor.Suppress("t:" + sumHex([]byte(text)))
+		return clipboard.WriteText(text)
 	case clipboard.ContentTypeImage:
-		h := "i:" + sumHex(blob)
-		s.suppressor.Suppress(h)
-		if err := clipboard.WriteImagePNG(blob); err != nil {
-			return err
-		}
+		s.suppressor.Suppress("i:" + sumHex(blob))
+		return clipboard.WriteImagePNG(blob)
 	default:
 		return fmt.Errorf("unknown content_type: %s", ct)
+	}
+}
+
+// CopyItem writes the stored item onto the clipboard but leaves the popup
+// open and does not auto-paste. Used by the inline/context "Copy" action so
+// the user can grab an entry without the window closing.
+func (s *Service) CopyItem(id int64) error {
+	return s.writeToClipboard(id)
+}
+
+// PasteItem writes the stored item back onto the X11 CLIPBOARD selection,
+// hides the popup, and (if enabled) auto-pastes into the focused window so
+// the user doesn't even need to press Ctrl+V. This is the row-click / Enter
+// "use this item" action.
+func (s *Service) PasteItem(id int64) error {
+	if err := s.writeToClipboard(id); err != nil {
+		return err
 	}
 	s.HidePopup()
 
@@ -185,9 +196,18 @@ func (s *Service) PinItem(id int64, pinned bool) error {
 	return s.store.SetPinned(id, pinned)
 }
 
-// DeleteItem removes a single history entry.
+// DeleteItem removes a single history entry. It suppresses the watcher with
+// the deleted item's hash so that, if that content is still on the clipboard,
+// the next poll doesn't re-ingest and resurrect the entry.
 func (s *Service) DeleteItem(id int64) error {
-	return s.store.Delete(id)
+	hash, err := s.store.Delete(id)
+	if err != nil {
+		return err
+	}
+	if hash != "" {
+		s.suppressor.Suppress(hash)
+	}
+	return nil
 }
 
 // ClearAll wipes history. When keepPinned is true, pinned rows survive.

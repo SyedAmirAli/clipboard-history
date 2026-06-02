@@ -129,34 +129,45 @@
   color: var(--text-soft);
 }
 
-/* Right cluster: hover-revealed inline actions */
+/* Right cluster: hover-revealed inline actions, vertically centered
+ * against the full row height (the row itself is top-aligned). */
 .item-right {
   display: flex;
   align-items: center;
-  gap: 1px;
+  align-self: center;
+  gap: 4px;
   flex-shrink: 0;
 }
 .item-actions {
   display: none;
-  gap: 1px;
+  gap: 4px;
   align-items: center;
 }
 .item:hover .item-actions,
-.item.focus .item-actions {
+.item.focus .item-actions,
+.item.pinned .item-actions {
   display: flex;
+}
+/* Filled pin on a pinned row's toggle button shows the amber accent. */
+.ab.pin-btn.pinned {
+  color: var(--pin);
+}
+.ab.pin-btn.pinned:hover {
+  color: var(--pin);
+  background: var(--surface-active);
 }
 
 .pin-marker {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--text-soft);
+  width: 28px;
+  height: 28px;
+  color: var(--pin);
 }
 .pin-marker svg {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
 }
 
 /* Inline action buttons (pin / copy / delete) */
@@ -164,23 +175,29 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 5px;
-  color: var(--text-soft);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   cursor: pointer;
-  transition: background var(--transition), color var(--transition);
-  border: none;
-  background: transparent;
+  transition: background var(--transition), color var(--transition),
+    border-color var(--transition);
   padding: 0;
 }
 .ab:hover {
   background: var(--surface-active);
   color: var(--text);
+  border-color: var(--border-strong);
+}
+.ab.danger {
+  color: var(--danger);
 }
 .ab.danger:hover {
+  background: rgba(var(--danger-rgb), 0.14);
   color: var(--danger);
-  background: transparent;
+  border-color: rgba(var(--danger-rgb), 0.32);
 }
 .ab svg {
   width: 12px;
@@ -550,4 +567,103 @@
 }
 .s-btn.danger:hover {
   background: rgba(var(--danger-rgb), 0.08);
+}
+
+/* ---------- Confirmation dialog ---------- */
+/* Mirrors the settings overlay: dim scrim over a blurred main content,
+   with a centered card built from the same surface/border/shadow tokens. */
+.confirm-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  --wails-draggable: no-drag;
+}
+.confirm-scrim.open {
+  opacity: 1;
+  pointer-events: all;
+}
+.confirm-dialog {
+  position: absolute;
+  z-index: 320;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -48%) scale(0.96);
+  width: min(320px, 82%);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow:
+    0 24px 64px -8px rgba(0, 0, 0, 0.7),
+    0 8px 24px -4px rgba(0, 0, 0, 0.5);
+  padding: 18px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+  --wails-draggable: no-drag;
+}
+.confirm-dialog.open {
+  opacity: 1;
+  pointer-events: all;
+  transform: translate(-50%, -50%) scale(1);
+}
+.confirm-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  margin-bottom: 11px;
+}
+.confirm-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.confirm-icon.danger {
+  background: rgba(var(--danger-rgb), 0.14);
+  color: var(--danger);
+}
+.confirm-title {
+  margin: 0 0 5px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.confirm-msg {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.confirm-actions .s-btn {
+  flex: 1;
+  justify-content: center;
+  padding: 7px 10px;
+}
+.s-btn.danger-solid {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+.s-btn.danger-solid:hover {
+  filter: brightness(1.08);
 }

@@ -23,6 +23,7 @@ declare global {
         Service?: {
           ListItems(filter: string, limit: number): Promise<ClipItem[]>;
           PasteItem(id: number): Promise<void>;
+          CopyItem(id: number): Promise<void>;
           PinItem(id: number, pinned: boolean): Promise<void>;
           DeleteItem(id: number): Promise<void>;
           ClearAll(keepPinned: boolean): Promise<void>;
@@ -52,6 +53,9 @@ export const api = {
   },
   pasteItem(id: number): Promise<void> {
     return svc().PasteItem(id);
+  },
+  copyItem(id: number): Promise<void> {
+    return svc().CopyItem(id);
   },
   pinItem(id: number, pinned: boolean): Promise<void> {
     return svc().PinItem(id, pinned);

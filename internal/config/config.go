@@ -82,12 +82,15 @@ func AutostartFilePath() (string, error) {
 }
 
 // SocketPath returns the path to the Unix domain socket used for
-// single-instance control (e.g. `clipd toggle`). Honours $XDG_RUNTIME_DIR
-// (the correct place for runtime sockets), falling back to the data dir.
+// single-instance control (e.g. `clipd toggle`).
+//
+// It lives in the data dir rather than $XDG_RUNTIME_DIR on purpose: the
+// path must resolve identically whether clipd is launched from a normal
+// login session (which sets XDG_RUNTIME_DIR) or from a bare, env-less
+// invocation such as `wsl.exe clipd toggle` from a Windows hotkey. Keying
+// it off the data dir (derived from $HOME) keeps the daemon and any client
+// in agreement regardless of how each was started.
 func SocketPath() (string, error) {
-	if rt := os.Getenv("XDG_RUNTIME_DIR"); rt != "" {
-		return filepath.Join(rt, AppName+".sock"), nil
-	}
 	dir, err := DataDir()
 	if err != nil {
 		return "", err

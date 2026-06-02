@@ -1,0 +1,8 @@
+build/bin
+node_modules
+frontend/dist
+frontend/wailsjs
+dist/
+*.deb
+*.tar.gz
+.DS_Store

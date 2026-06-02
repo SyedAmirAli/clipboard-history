@@ -1,0 +1,253 @@
+/* clipd — base styles + theme tokens.
+ * Theme is driven by [data-theme="dark"|"light"] on <html>, falling back
+ * to system preference via prefers-color-scheme. The Settings UI can
+ * override the data-theme attribute at runtime. */
+
+:root {
+  color-scheme: light dark;
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  --transition: 140ms ease;
+}
+
+/* Light theme (default) */
+:root,
+:root[data-theme="light"] {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-2: #f0f2f7;
+  --surface-hover: #eef0f6;
+  --surface-active: #e5e8f0;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --text: #1d1f24;
+  --text-muted: #6a6f78;
+  --text-soft: #8a8f99;
+  --accent: #4f7cff;
+  --accent-text: #ffffff;
+  --danger: #d3434b;
+  --pin: #d99c2b;
+  --shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.16),
+    0 2px 8px -2px rgba(0, 0, 0, 0.08);
+}
+
+/* Dark theme */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15161b;
+    --surface: #1e2027;
+    --surface-2: #25282f;
+    --surface-hover: #2d3038;
+    --surface-active: #383b44;
+    --border: rgba(255, 255, 255, 0.07);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text: #ebecf0;
+    --text-muted: #9a9fab;
+    --text-soft: #6f7480;
+    --accent: #6d96ff;
+    --accent-text: #0d0e12;
+    --danger: #ef6d75;
+    --pin: #f0b73d;
+    --shadow: 0 16px 50px -10px rgba(0, 0, 0, 0.6),
+      0 4px 14px -4px rgba(0, 0, 0, 0.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15161b;
+  --surface: #1e2027;
+  --surface-2: #25282f;
+  --surface-hover: #2d3038;
+  --surface-active: #383b44;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text: #ebecf0;
+  --text-muted: #9a9fab;
+  --text-soft: #6f7480;
+  --accent: #6d96ff;
+  --accent-text: #0d0e12;
+  --danger: #ef6d75;
+  --pin: #f0b73d;
+  --shadow: 0 16px 50px -10px rgba(0, 0, 0, 0.6),
+    0 4px 14px -4px rgba(0, 0, 0, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+input,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Top bar / search ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  /* Make the entire topbar a drag handle for the frameless window. */
+  --wails-draggable: drag;
+}
+
+.search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  transition: border-color var(--transition), background var(--transition);
+  --wails-draggable: no-drag;
+}
+
+.search-wrap:focus-within {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.search-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+#search {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--text);
+  user-select: text;
+}
+
+#search::placeholder {
+  color: var(--text-soft);
+}
+
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: background var(--transition), color var(--transition);
+  flex-shrink: 0;
+}
+
+.iconbtn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.iconbtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- Status bar ---------- */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+/* ---------- Toast ---------- */
+
+.toast {
+  position: fixed;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: var(--surface-active);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.toast.show {
+  opacity: 1;
+}
+
+/* ---------- Scrollbars (subtle) ---------- */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-soft);
+}

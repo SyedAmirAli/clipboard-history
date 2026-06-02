@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "clipd",
+  "outputfilename": "clipd",
+  "frontend:install": "yarn install",
+  "frontend:build": "yarn build",
+  "frontend:dev:watcher": "yarn dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Syed Amir Ali",
+    "email": "sywmohammadamir@gmail.com"
+  },
+  "info": {
+    "productName": "clipd",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026",
+    "comments": "Lightweight clipboard history for Linux"
+  }
+}

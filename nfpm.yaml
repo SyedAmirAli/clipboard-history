@@ -1,0 +1,48 @@
+# nfpm config — builds the .deb for clipd.
+# Run after a successful `wails build -tags webkit2_41 -clean`.
+#
+#   nfpm pkg --packager deb --config nfpm.yaml --target dist/
+#
+# Produces dist/clipd_<version>_<arch>.deb
+
+name: clipd
+arch: amd64
+platform: linux
+version: "0.1.0"
+section: utils
+priority: optional
+maintainer: "Syed Amir Ali <sywmohammadamir@gmail.com>"
+description: |
+  Lightweight clipboard history manager for X11 Linux desktops.
+  Captures text and image clipboard contents, supports pinning,
+  search, a global hotkey (default Super+V), system tray, and a
+  configurable max history size. Inspired by Windows' Win+V panel.
+vendor: "clipd"
+homepage: "https://github.com/syedamirali/clipd"
+license: "MIT"
+
+depends:
+  - libgtk-3-0
+  - libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
+  - libayatana-appindicator3-1
+  - libx11-6
+  - xclip
+
+recommends:
+  - libnotify-bin
+
+contents:
+  - src: ./build/bin/clipd
+    dst: /usr/bin/clipd
+    file_info:
+      mode: 0755
+
+  - src: ./build/appicon.png
+    dst: /usr/share/icons/hicolor/256x256/apps/clipd.png
+    file_info:
+      mode: 0644
+
+  - src: ./build/linux/clipd.desktop
+    dst: /usr/share/applications/clipd.desktop
+    file_info:
+      mode: 0644

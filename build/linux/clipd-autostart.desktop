@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=clipd
+GenericName=Clipboard History
+Comment=Lightweight clipboard history (auto-start)
+Exec=/usr/bin/clipd
+Icon=clipd
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true

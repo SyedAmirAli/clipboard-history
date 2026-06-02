@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=clipd
+GenericName=Clipboard History
+Comment=Lightweight clipboard history with pinning and image support
+Exec=/usr/bin/clipd
+Icon=clipd
+Terminal=false
+Categories=Utility;Office;
+Keywords=clipboard;copy;paste;history;
+StartupNotify=false

@@ -25,8 +25,11 @@ Prerequisites:
   ```bash
   sudo apt-get install -y build-essential pkg-config \
     libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-    libx11-dev libxfixes-dev xclip
+    libx11-dev libxfixes-dev xclip xdotool
   ```
+  (`xclip` reads/writes the clipboard; `xdotool` powers auto‑paste.)
+- For the `.deb` step: `nfpm` —
+  `go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest`
 
 Build:
 ```bash
@@ -50,7 +53,10 @@ Installs the binary to `/usr/bin/clipd`, an app icon, and a `.desktop` launcher.
 ## 2. Command-line interface
 
 `clipd` doubles as its own remote control. A second invocation talks to the
-already‑running instance over a Unix socket at `$XDG_RUNTIME_DIR/clipd.sock`.
+already‑running instance over a Unix socket at `~/.local/share/clipd/clipd.sock`.
+The path is derived from `$HOME` (not `$XDG_RUNTIME_DIR`) so it resolves
+identically whether clipd is launched from a desktop session or from a bare,
+env‑less call like `wsl.exe clipd toggle` bound to a Windows hotkey.
 
 | Command | What it does |
 |---------|--------------|
@@ -74,16 +80,23 @@ Once the popup is open:
 
 | Key | Action |
 |-----|--------|
-| Type anything | Live search the history (debounced, FTS5‑backed) |
+| Type anything | Live search the history (debounced, case‑insensitive substring match) |
 | `/` | Jump focus to the search box |
 | `↓` / `↑` | Move selection down / up the list |
-| `Enter` | Paste the selected item back to the clipboard (and hide) |
+| `Enter` | Paste the selected item (copies, hides, and auto‑pastes into your previous app) |
 | `Ctrl` + `,` | Open Settings |
-| `Esc` | Close the popup |
-| Right‑click an item | Context menu: Pin/Unpin, Delete, Copy |
+| `Esc` | Close the popup (or close an open dialog/menu first) |
+| Right‑click an item | Context menu: Copy, Pin/Unpin, Delete |
 
-The window also hides automatically when it loses focus (configurable —
-*Hide on blur*).
+Other UI:
+- **Filter chips** at the top — All / Text / Images / Pinned.
+- **Title bar** with macOS‑style traffic lights — red hides, amber minimizes
+  (to the taskbar), green maximizes; drag the bar to move the window.
+- **Row click** pastes (= `Enter`); the inline **Copy** button just copies to
+  the clipboard *without* closing; **Pin** and **Delete** never close the window.
+
+In *popup* mode the window also hides when it loses focus (configurable —
+*Hide on blur*); in the default *taskbar* mode it stays put.
 
 ---
 
@@ -92,9 +105,10 @@ The window also hides automatically when it loses focus (configurable —
 A quick map of what's built in:
 
 **Capture & history**
-- Automatic clipboard monitoring via the X11 **XFixes** extension (event‑driven,
-  with a 500 ms polling fallback)
-- Captures both **text** and **images** (PNG)
+- Automatic clipboard monitoring — polls the X11 CLIPBOARD selection via
+  `xclip` every 500 ms (pure‑Go, no cgo/libX11 link, keeps the binary small)
+- Captures both **text** and **images** (PNG, when the clipboard offers an
+  `image/png` target)
 - **De‑duplication** by SHA‑256 content hash — re‑copying something bumps it to
   the top instead of creating a duplicate
 - Configurable **max history size** (default 200 items)
@@ -102,19 +116,25 @@ A quick map of what's built in:
 - Image **thumbnails** generated for the list view
 
 **Browse & use**
-- Live **full‑text search** (SQLite FTS5)
-- **Pinned** section that survives "Clear all"
-- One‑click / `Enter` **paste‑back** to the system clipboard
-- **Pin/unpin**, **delete single item**, **clear all (optionally keep pinned)**
+- Live **search** — case‑insensitive substring match over text entries
+- **Filter chips**: All / Text / Images / Pinned
+- **Pinned** section that survives "Clear history"
+- **Row click / `Enter` = paste** — copies, hides, and (if enabled) auto‑pastes
+  into the previously focused app via a synthesised `Ctrl+V`
+- **Copy** action — puts an item on the clipboard *without* closing the window
+- **Pin / Unpin**, **delete a single item**, **clear history (keeps pinned)**
+- **Themed confirmation dialogs** for delete and clear (no native popups)
 - Keyboard‑first navigation (arrows + Enter)
 - Right‑click context menu per item
 
-**Access**
+**Access & control**
 - Global **Super+V hotkey** (X11 `XGrabKey`) to summon the popup
-- **CLI trigger** (`clipd toggle/show/hide`) as the hotkey alternative ★ added
-- **Single‑instance guard** — running `clipd` twice toggles instead of duplicating ★ added
+- **CLI control** — `clipd start|toggle|show|hide|quit|restart` (see §2); the
+  hotkey alternative and a clean way to script clipd
+- **Single‑instance guard** — running `clipd` twice toggles instead of duplicating
 - **System tray** icon with menu: Open, Clear all, Settings, Quit
-- Frameless, always‑on‑top, auto‑centered popup window
+- **Frameless window with a custom macOS‑style title bar**; runs as either a
+  normal **taskbar window** (default) or a floating always‑on‑top **popup**
 
 **Persistence & integration**
 - **SQLite** storage (WAL mode) at `~/.local/share/clipd/clipd.db`
@@ -122,8 +142,6 @@ A quick map of what's built in:
 - **Light/dark theme** (auto / light / dark)
 - **Wayland guard** — detects a Wayland session and degrades gracefully to
   tray/CLI‑only mode instead of failing
-
-★ = features added on top of the original plan in this working copy.
 
 ---
 
@@ -140,8 +158,10 @@ the SQLite DB. Defaults:
 | Max image MB | `5` | Reject images larger than this |
 | Theme | `auto` | `auto` / `light` / `dark` |
 | Autostart | `false` | Launch clipd at login |
-| Hide on blur | `true` | Auto‑hide popup when it loses focus |
+| Hide on blur | `true` | Auto‑hide popup when it loses focus (popup mode only) |
 | Launch at top | `false` | Position popup near the top of the screen |
+| **Taskbar window** | `true` | On: normal window with a taskbar entry. Off: floating always‑on‑top popup that hides on blur. **Restart to apply.** |
+| **Auto‑paste on select** | `true` | After selecting an item, synthesise `Ctrl+V` into the focused window (requires `xdotool`) |
 
 ---
 
@@ -159,13 +179,14 @@ clipd show
 clipd hide
 clipd toggle
 
-# Stop it
-pkill -f build/bin/clipd        # or use the tray "Quit" item
+# Stop / restart it cleanly
+clipd quit                      # fully shuts down (or use the tray "Quit")
+clipd restart                   # stop + start a fresh instance
 
 # Where its data lives
 ~/.local/share/clipd/clipd.db          # history (SQLite)
+~/.local/share/clipd/clipd.sock        # control socket (transient)
 ~/.config/autostart/clipd.desktop      # autostart entry (if enabled)
-$XDG_RUNTIME_DIR/clipd.sock            # control socket (transient)
 ```
 
 Inspect history directly (optional, needs `sqlite3`):
@@ -201,10 +222,18 @@ Microsoft PowerToys (Keyboard Manager → run program) or AutoHotkey:
   for the full feature set.
 - **Wayland:** clipboard monitoring and the X11 hotkey are disabled; use the
   tray icon or `clipd toggle`. clipd detects this and won't hard‑fail.
-- **WSL2 / WSLg:** verified to build and run; the window renders, clipboard
-  auto‑capture works, and the `clipd toggle/show/hide` CLI works. The global
-  Super+V grab and the appindicator tray are unreliable under WSLg — use the
-  CLI trigger (section 7) instead. Not a substitute for QA on a real desktop.
+- **WSL2 / WSLg:** builds and runs; the window renders, **text** auto‑capture
+  works, and the `clipd` CLI works. Known WSLg limitations (not clipd bugs):
+  - The global **Super+V** grab and the **appindicator tray** don't work —
+    bind `clipd toggle` to a Windows hotkey instead (section 7).
+  - **Windows screenshots aren't captured**: WSLg doesn't expose a copied
+    image to X11 as an `image/png` target, so there's nothing for clipd to
+    grab (the image still pastes fine in Windows apps). Image capture works
+    on a real Linux desktop, where screenshot tools set `image/png`.
+  - **Auto‑paste** reaches Linux/XWayland apps but can't type into Windows
+    apps (different display server) — the value is still on the clipboard.
+
+  Treat WSL as a build/dev environment; do final QA on a real X11 desktop.
 
 ---
 
@@ -219,3 +248,6 @@ Microsoft PowerToys (Keyboard Manager → run program) or AutoHotkey:
 | Build fails: `pattern all:frontend/dist: no matching files` | Run the frontend build — `wails build` does this for you. |
 | Nothing gets captured | Confirm you're on X11 (`echo $XDG_SESSION_TYPE`); `xclip` installed; clipd running. |
 | Super+V does nothing | Expected under Wayland/WSLg — bind `clipd toggle` instead (section 7). |
+| Screenshots/images not in history | The clipboard must offer an `image/png` target (`xclip -selection clipboard -t TARGETS -o`). Windows screenshots under WSLg don't — see section 8. |
+| Auto‑paste doesn't type into the field | Install `xdotool`; it targets the window focused *after* clipd hides. Terminals often need `Ctrl+Shift+V`, so toggle Auto‑paste off for those. |
+| Corners look dark, not rounded | Your compositor isn't alpha‑compositing (common under WSLg). Looks correct on a real desktop with a compositor. |

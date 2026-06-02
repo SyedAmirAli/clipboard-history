@@ -11,6 +11,8 @@ type WailsRuntime = {
   EventsOff(name: string): void;
   WindowHide(): void;
   WindowShow(): void;
+  WindowMinimise(): void;
+  WindowToggleMaximise(): void;
   Quit(): void;
 };
 
@@ -68,6 +70,12 @@ export const api = {
   },
   hidePopup(): Promise<void> {
     return svc().HidePopup();
+  },
+  minimizeWindow(): void {
+    window.runtime?.WindowMinimise();
+  },
+  toggleMaximizeWindow(): void {
+    window.runtime?.WindowToggleMaximise();
   },
   async systemInfo(): Promise<SystemInfo> {
     const raw = await svc().SystemInfo();

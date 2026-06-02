@@ -80,3 +80,17 @@ func AutostartFilePath() (string, error) {
 	}
 	return filepath.Join(dir, AppName+".desktop"), nil
 }
+
+// SocketPath returns the path to the Unix domain socket used for
+// single-instance control (e.g. `clipd toggle`). Honours $XDG_RUNTIME_DIR
+// (the correct place for runtime sockets), falling back to the data dir.
+func SocketPath() (string, error) {
+	if rt := os.Getenv("XDG_RUNTIME_DIR"); rt != "" {
+		return filepath.Join(rt, AppName+".sock"), nil
+	}
+	dir, err := DataDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, AppName+".sock"), nil
+}

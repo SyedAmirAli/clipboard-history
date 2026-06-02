@@ -37,6 +37,15 @@ type Settings struct {
 	Autostart   bool   `json:"autostart"`
 	HideOnBlur  bool   `json:"hideOnBlur"`
 	LaunchAtTop bool   `json:"launchAtTop"`
+	// WindowFrame, when true, runs clipd as a normal decorated window with
+	// native minimize/maximize/close buttons and a taskbar entry. When
+	// false, clipd is a frameless always-on-top popup. Applied at startup
+	// (changing it requires a restart).
+	WindowFrame bool `json:"windowFrame"`
+	// AutoPaste, when true, synthesises a Ctrl+V into the previously focused
+	// window after an item is selected, so the value is pasted automatically
+	// (requires xdotool).
+	AutoPaste bool `json:"autoPaste"`
 }
 
 // DefaultSettings returns the baseline settings used on first run.
@@ -50,5 +59,7 @@ func DefaultSettings() Settings {
 		Autostart:   false,
 		HideOnBlur:  true,
 		LaunchAtTop: false,
+		WindowFrame: true,
+		AutoPaste:   true,
 	}
 }

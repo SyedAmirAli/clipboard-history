@@ -9,9 +9,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -162,6 +164,19 @@ func (s *Service) PasteItem(id int64) error {
 		return fmt.Errorf("unknown content_type: %s", ct)
 	}
 	s.HidePopup()
+
+	// Auto-paste: after the popup hides and focus returns to the user's
+	// previous window, synthesise Ctrl+V so the value drops straight into the
+	// field they were editing. Done asynchronously with a short delay to let
+	// the WM hand focus back and xclip take ownership of the selection.
+	if s.CurrentSettings().AutoPaste {
+		go func() {
+			time.Sleep(150 * time.Millisecond)
+			if err := clipboard.SendPaste(); err != nil {
+				log.Printf("auto-paste: %v", err)
+			}
+		}()
+	}
 	return nil
 }
 
@@ -202,6 +217,8 @@ func (s *Service) GetSettings() (clipboard.Settings, error) {
 	out.KeepImages = get("keep_images", boolStr(def.KeepImages)) == "1"
 	out.HideOnBlur = get("hide_on_blur", boolStr(def.HideOnBlur)) == "1"
 	out.LaunchAtTop = get("launch_at_top", boolStr(def.LaunchAtTop)) == "1"
+	out.WindowFrame = get("window_frame", boolStr(def.WindowFrame)) == "1"
+	out.AutoPaste = get("auto_paste", boolStr(def.AutoPaste)) == "1"
 	if s.autostart != nil {
 		if v, err := s.autostart.IsEnabled(); err == nil {
 			out.Autostart = v
@@ -260,6 +277,12 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 	if err := put("launch_at_top", boolStr(in.LaunchAtTop)); err != nil {
 		return prev, err
 	}
+	if err := put("window_frame", boolStr(in.WindowFrame)); err != nil {
+		return prev, err
+	}
+	if err := put("auto_paste", boolStr(in.AutoPaste)); err != nil {
+		return prev, err
+	}
 	if s.hotkeyMgr != nil && in.Hotkey != prev.Hotkey {
 		if err := s.hotkeyMgr.Register(in.Hotkey); err != nil {
 			return prev, fmt.Errorf("re-register hotkey: %w", err)
@@ -282,8 +305,14 @@ func (s *Service) ShowPopup() {
 		return
 	}
 	wailsruntime.WindowShow(s.ctx)
-	wailsruntime.WindowSetAlwaysOnTop(s.ctx, true)
-	wailsruntime.WindowCenter(s.ctx)
+	wailsruntime.WindowUnminimise(s.ctx) // restore if minimised to the taskbar
+	// In windowed mode the user owns the window position and stacking, so we
+	// don't force always-on-top or re-center on every summon. In popup mode
+	// we keep the classic Windows+V behaviour: float on top, centered.
+	if !s.CurrentSettings().WindowFrame {
+		wailsruntime.WindowSetAlwaysOnTop(s.ctx, true)
+		wailsruntime.WindowCenter(s.ctx)
+	}
 	s.visible.Store(true)
 }
 

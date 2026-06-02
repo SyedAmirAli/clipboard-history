@@ -27,6 +27,7 @@ depends:
   - libayatana-appindicator3-1
   - libx11-6
   - xclip
+  - xdotool
 
 recommends:
   - libnotify-bin

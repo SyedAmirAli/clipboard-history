@@ -27,6 +27,8 @@ export interface AppSettings {
   autostart: boolean;
   hideOnBlur: boolean;
   launchAtTop: boolean;
+  windowFrame: boolean;
+  autoPaste: boolean;
 }
 
 export interface SystemInfo {

@@ -7,30 +7,60 @@
   </head>
   <body>
     <div id="app">
-      <header class="topbar">
-        <div class="search-wrap">
-          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="7"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input id="search" type="text" autocomplete="off" spellcheck="false" placeholder="Search clipboard history…" />
-          <button class="iconbtn" id="open-settings" title="Settings" aria-label="Settings">
+      <!-- Main content (blurs when the settings overlay is open) -->
+      <div class="main-content" id="main-content">
+        <!-- Custom titlebar: macOS traffic lights · drag handle · search · settings -->
+        <header class="titlebar">
+          <div class="traffic">
+            <button class="dot dot-close" id="win-close" data-sym="✕" title="Hide" aria-label="Hide"></button>
+            <button class="dot dot-min" id="win-min" data-sym="−" title="Minimize" aria-label="Minimize"></button>
+            <button class="dot dot-max" id="win-max" data-sym="⤢" title="Maximize" aria-label="Maximize"></button>
+          </div>
+          <div class="drag-handle" title="Drag window" aria-hidden="true">
+            <svg viewBox="0 0 16 20" fill="currentColor"><circle cx="5" cy="5" r="2"/><circle cx="11" cy="5" r="2"/><circle cx="5" cy="10" r="2"/><circle cx="11" cy="10" r="2"/><circle cx="5" cy="15" r="2"/><circle cx="11" cy="15" r="2"/></svg>
+          </div>
+          <div class="search-wrap">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="7"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input id="search" type="text" autocomplete="off" spellcheck="false" placeholder="Search clipboard history…" />
+          </div>
+          <button class="iconbtn settings-btn" id="open-settings" title="Settings (Ctrl+,)" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
           </button>
-        </div>
-      </header>
-      <main id="list" class="list" tabindex="-1"></main>
-      <footer class="statusbar">
-        <span id="status-count">0 items</span>
-        <span id="status-hint">↑↓ navigate · Enter paste · Esc close</span>
-      </footer>
-      <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-hidden="true"></div>
-      <div id="ctx-menu" class="ctx-menu hidden" role="menu"></div>
+        </header>
+
+        <!-- Filter chips -->
+        <nav class="chips" id="chips" aria-label="Filter">
+          <button class="chip active" data-filter="all">All</button>
+          <button class="chip" data-filter="text">Text</button>
+          <button class="chip" data-filter="images">Images</button>
+          <button class="chip" data-filter="pinned">Pinned</button>
+        </nav>
+
+        <main id="list" class="list" tabindex="-1"></main>
+
+        <footer class="statusbar">
+          <span id="status-count">0 items</span>
+          <span class="status-hint">↑↓ navigate · Enter paste · / search · Esc close</span>
+        </footer>
+      </div>
+
+      <!-- Settings overlay (scrim dims + content blurs behind it) -->
+      <div class="settings-scrim" id="settings-scrim"></div>
+      <div id="settings-modal" class="settings-overlay" role="dialog" aria-modal="true" aria-hidden="true"></div>
+
+      <!-- Toast -->
       <div id="toast" class="toast hidden" role="status"></div>
     </div>
+
+    <!-- Context menu lives outside #app so the settings blur never touches it -->
+    <div id="ctx-menu" class="ctx-menu hidden" role="menu"></div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

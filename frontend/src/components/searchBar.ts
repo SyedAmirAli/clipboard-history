@@ -1,5 +1,5 @@
 // Search bar wires the input element to a debounced query callback.
-// The input element itself lives in index.html so the topbar can act
+// The input element itself lives in index.html so the titlebar can act
 // as a drag handle for the frameless window with the input cut-out.
 
 export interface SearchBar {

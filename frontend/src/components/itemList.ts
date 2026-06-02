@@ -11,16 +11,19 @@ import type { ClipItem } from '../types';
 const SVG_TEXT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>`;
 const SVG_PIN_FILLED = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.5c-.4 0-.78.16-1.06.44L8.06 5.88a1.5 1.5 0 0 0 0 2.12L9 8.94v3.32l-3.06 3.06a1.5 1.5 0 0 0 0 2.12L7.06 18.6a1.5 1.5 0 0 0 2.12 0L11 16.74V22h2v-5.26l1.82 1.82a1.5 1.5 0 0 0 2.12 0l1.12-1.12a1.5 1.5 0 0 0 0-2.12L15 12.26V8.94l.94-.94a1.5 1.5 0 0 0 0-2.12l-2.88-2.94c-.28-.28-.66-.44-1.06-.44z"/></svg>`;
 const SVG_PIN_OUTLINE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a1 1 0 0 0 0-2H8a1 1 0 0 0 0 2h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>`;
+const SVG_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const SVG_DELETE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
 const SVG_EMPTY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1" ry="1"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg>`;
 
 export interface ItemListActions {
   onPaste(item: ClipItem): void;
   onPinToggle(item: ClipItem): void;
+  onDelete(item: ClipItem): void;
   onContextMenu(at: { x: number; y: number }, item: ClipItem): void;
 }
 
 export interface ItemList {
-  setItems(items: ClipItem[]): void;
+  setItems(items: ClipItem[], opts?: { filtered?: boolean }): void;
   handleKey(e: KeyboardEvent): void;
   count(): number;
   pasteFocused(): void;
@@ -29,10 +32,19 @@ export interface ItemList {
 export function createItemList(root: HTMLElement, actions: ItemListActions): ItemList {
   let items: ClipItem[] = [];
   let focusIdx = -1;
+  let filtered = false;
 
   const render = () => {
     if (items.length === 0) {
-      root.innerHTML = `
+      root.innerHTML = filtered
+        ? `
+        <div class="empty-state">
+          ${SVG_EMPTY.replace('<svg', '<svg class="empty-icon"')}
+          <h3>No results</h3>
+          <p>Try a different search or filter.</p>
+        </div>
+      `
+        : `
         <div class="empty-state">
           ${SVG_EMPTY.replace('<svg', '<svg class="empty-icon"')}
           <h3>Your clipboard is empty</h3>
@@ -59,16 +71,20 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
 
   const renderItem = (it: ClipItem, idx: number): string => {
     const isImage = it.contentType === 'image';
-    const iconHtml = isImage && it.imageThumb
-      ? `<img alt="" src="${it.imageThumb}"/>`
+    const iconHtml = isImage
+      ? it.imageThumb
+        ? `<img alt="" src="${it.imageThumb}"/>`
+        : `<div class="item-thumb-fallback"></div>`
       : SVG_TEXT;
+    // Pinned rows show a static amber marker; unpinned rows get a pin button.
     const pinHtml = it.pinned
       ? `<span class="pin-marker" title="Pinned">${SVG_PIN_FILLED}</span>`
-      : '';
+      : `<button class="ab pin-btn" title="Pin">${SVG_PIN_OUTLINE}</button>`;
     const preview = escapeHtml(it.preview || '');
+    const time = formatRelative(it.lastUsedAt);
     const meta = isImage
-      ? `${it.imageW || '?'}×${it.imageH || '?'} · PNG`
-      : `${formatRelative(it.lastUsedAt)}`;
+      ? `${it.imageW || '?'}×${it.imageH || '?'} · ${time}`
+      : time;
     return `
       <div class="item ${isImage ? 'kind-image' : 'kind-text'} ${it.pinned ? 'pinned' : ''}"
            data-idx="${idx}" role="button" tabindex="-1">
@@ -77,8 +93,12 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
           <div class="item-preview">${preview}</div>
           <div class="item-meta">${meta}</div>
         </div>
-        <div class="item-actions">
-          ${pinHtml || `<button class="iconbtn pin-btn" title="Pin">${SVG_PIN_OUTLINE}</button>`}
+        <div class="item-right">
+          <div class="item-actions">
+            ${pinHtml}
+            <button class="ab copy-btn" title="Copy">${SVG_COPY}</button>
+            <button class="ab danger del-btn" title="Delete">${SVG_DELETE}</button>
+          </div>
         </div>
       </div>
     `;
@@ -110,8 +130,16 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
     const idx = Number(itemEl.dataset.idx);
     const item = items[idx];
     if (!item) return;
+    if (target.closest('.del-btn')) {
+      actions.onDelete(item);
+      return;
+    }
     if (target.closest('.pin-btn')) {
       actions.onPinToggle(item);
+      return;
+    }
+    if (target.closest('.copy-btn')) {
+      actions.onPaste(item);
       return;
     }
     actions.onPaste(item);
@@ -136,8 +164,9 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
   });
 
   return {
-    setItems(next) {
+    setItems(next, opts) {
       items = next;
+      filtered = opts?.filtered ?? false;
       if (focusIdx >= items.length) focusIdx = items.length - 1;
       if (focusIdx < 0 && items.length > 0) focusIdx = 0;
       render();

@@ -1,9 +1,11 @@
 # clipd — Usage & Management Guide
 
-A lightweight (~13 MB) clipboard‑history manager for X11 Linux (Debian/Ubuntu),
-built with Go + Wails v2 + vanilla TypeScript. Keeps a searchable history of the
-text and images you copy, lets you pin favourites, and pastes any past entry back
-to the clipboard with a click or a keystroke.
+A lightweight (~13 MB) clipboard‑history manager for Linux (Debian/Ubuntu/Mint),
+built with Go + Wails v2 + vanilla TypeScript. Works on both **X11** and
+**Wayland** — a single binary that detects the session and drives the clipboard
+through `xclip`/`xdotool` (X11) or `wl-clipboard` (Wayland). Keeps a searchable
+history of the text and images you copy, lets you pin favourites, and pastes any
+past entry back to the clipboard with a click or a keystroke.
 
 ---
 
@@ -25,9 +27,11 @@ Prerequisites:
   ```bash
   sudo apt-get install -y build-essential pkg-config \
     libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-    libx11-dev libxfixes-dev xclip xdotool
+    libx11-dev libxfixes-dev xclip xdotool wl-clipboard
   ```
-  (`xclip` reads/writes the clipboard; `xdotool` powers auto‑paste.)
+  (On X11, `xclip` reads/writes the clipboard and `xdotool` powers auto‑paste;
+  on Wayland, `wl-clipboard` provides `wl-paste`/`wl-copy`. Both toolsets are
+  installed so the one binary works in either session.)
 - For the `.deb` step: `nfpm` —
   `go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest`
 
@@ -105,8 +109,9 @@ In *popup* mode the window also hides when it loses focus (configurable —
 A quick map of what's built in:
 
 **Capture & history**
-- Automatic clipboard monitoring — polls the X11 CLIPBOARD selection via
-  `xclip` every 500 ms (pure‑Go, no cgo/libX11 link, keeps the binary small)
+- Automatic clipboard monitoring — polls the clipboard every 500 ms via
+  `xclip` (X11) or `wl-paste` (Wayland), chosen at runtime (pure‑Go, no
+  cgo/libX11 link, keeps the binary small)
 - Captures both **text** and **images** (PNG, when the clipboard offers an
   `image/png` target)
 - **De‑duplication** by SHA‑256 content hash — re‑copying something bumps it to
@@ -128,9 +133,13 @@ A quick map of what's built in:
 - Right‑click context menu per item
 
 **Access & control**
-- Global **Super+V hotkey** (X11 `XGrabKey`) to summon the popup
+- Global **Super+V hotkey** to summon the popup — an X11 `XGrabKey` on X11;
+  on Wayland (where apps can't grab global keys) clipd auto‑installs a GNOME
+  custom keybinding that runs `clipd toggle`
 - **CLI control** — `clipd start|toggle|show|hide|quit|restart` (see §2); the
   hotkey alternative and a clean way to script clipd
+- **`clipd install-shortcut [spec]` / `remove-shortcut`** — bind/unbind the
+  desktop global shortcut on GNOME/Wayland (or to rebind the key)
 - **Single‑instance guard** — running `clipd` twice toggles instead of duplicating
 - **System tray** icon with menu: Open, Clear all, Settings, Quit
 - **Frameless window with a custom macOS‑style title bar**; runs as either a
@@ -138,10 +147,12 @@ A quick map of what's built in:
 
 **Persistence & integration**
 - **SQLite** storage (WAL mode) at `~/.local/share/clipd/clipd.db`
-- **Autostart** toggle — writes `~/.config/autostart/clipd.desktop`
+- **Autostart on login** — the `.deb` installs a system‑wide entry at
+  `/etc/xdg/autostart/clipd.desktop` (autostarts for every user out of the
+  box); the in‑app toggle layers a per‑user override (`Hidden=true`) to opt out
 - **Light/dark theme** (auto / light / dark)
-- **Wayland guard** — detects a Wayland session and degrades gracefully to
-  tray/CLI‑only mode instead of failing
+- **X11 + Wayland** — the binary detects the session and uses the matching
+  clipboard backend; no separate builds per display server
 
 ---
 
@@ -200,11 +211,20 @@ sqlite3 ~/.local/share/clipd/clipd.db \
 ## 7. Binding a shortcut to `clipd toggle`
 
 Because `clipd toggle` is just a command, you can bind it to any key your
-environment offers — handy when the built‑in X11 hotkey can't grab the key.
+environment offers — handy when the built‑in X11 hotkey can't grab the key
+(always the case on Wayland, where no app can grab a global shortcut).
 
-**Native Linux desktop (GNOME example):**
+**GNOME / Wayland (automatic):** clipd already does this for you — on first run
+under a GNOME Wayland session it installs a custom keybinding (`Super+V` →
+`clipd toggle`) via `gsettings`. Re‑run or rebind any time with:
+```bash
+clipd install-shortcut "Super+V"   # or any spec, e.g. "Ctrl+Alt+V"
+clipd remove-shortcut              # undo it
+```
+
+**Other desktops (manual):**
 Settings → Keyboard → Custom Shortcuts → add command `clipd toggle`, assign a key.
-(XFCE, KDE, etc. have equivalent "custom shortcut" panels.)
+(XFCE, KDE, Cinnamon, etc. have equivalent "custom shortcut" panels.)
 
 **WSL / Windows side** (since global X11 hotkeys don't grab under WSLg):
 bind a Windows shortcut that runs the command inside WSL — e.g. with
@@ -218,10 +238,13 @@ Microsoft PowerToys (Keyboard Manager → run program) or AutoHotkey:
 
 ## 8. Platform notes
 
-- **Target platform:** X11 on Debian/Ubuntu. This is the supported environment
-  for the full feature set.
-- **Wayland:** clipboard monitoring and the X11 hotkey are disabled; use the
-  tray icon or `clipd toggle`. clipd detects this and won't hard‑fail.
+- **X11 (Debian/Ubuntu/Mint, "on Xorg"):** the full feature set — clipboard
+  capture via `xclip`, the `Super+V` global grab, and `xdotool` auto‑paste.
+- **Wayland (Ubuntu's default GNOME session):** clipboard capture works via
+  `wl-clipboard`; the global shortcut is registered with the desktop (auto on
+  GNOME, see §7) since apps can't grab keys directly. Auto‑paste is disabled —
+  Wayland blocks synthetic input — so a selected item lands on the clipboard
+  and you paste it with `Ctrl+V`.
 - **WSL2 / WSLg:** builds and runs; the window renders, **text** auto‑capture
   works, and the `clipd` CLI works. Known WSLg limitations (not clipd bugs):
   - The global **Super+V** grab and the **appindicator tray** don't work —
@@ -246,8 +269,9 @@ Microsoft PowerToys (Keyboard Manager → run program) or AutoHotkey:
 | `libEGL ... DRI3` warnings | Harmless — just means no GPU acceleration (common in WSLg). |
 | Build fails: `webkit2gtk-4.1 MISSING` | Install the dev libs in section 1. |
 | Build fails: `pattern all:frontend/dist: no matching files` | Run the frontend build — `wails build` does this for you. |
-| Nothing gets captured | Confirm you're on X11 (`echo $XDG_SESSION_TYPE`); `xclip` installed; clipd running. |
-| Super+V does nothing | Expected under Wayland/WSLg — bind `clipd toggle` instead (section 7). |
+| Nothing gets captured | Check your session (`echo $XDG_SESSION_TYPE`): on X11 install `xclip`, on Wayland install `wl-clipboard`; confirm clipd is running. |
+| Super+V does nothing | On Wayland the X11 grab can't work; run `clipd install-shortcut` (GNOME) or bind `clipd toggle` manually (section 7). Check the key isn't already taken by the desktop. |
+| Auto‑paste doesn't fire on Wayland | Expected — Wayland blocks synthetic keystrokes. The item is on the clipboard; press `Ctrl+V`. |
 | Screenshots/images not in history | The clipboard must offer an `image/png` target (`xclip -selection clipboard -t TARGETS -o`). Windows screenshots under WSLg don't — see section 8. |
 | Auto‑paste doesn't type into the field | Install `xdotool`; it targets the window focused *after* clipd hides. Terminals often need `Ctrl+Shift+V`, so toggle Auto‑paste off for those. |
 | Corners look dark, not rounded | Your compositor isn't alpha‑compositing (common under WSLg). Looks correct on a real desktop with a compositor. |

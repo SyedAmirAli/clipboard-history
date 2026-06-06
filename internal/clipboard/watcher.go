@@ -13,14 +13,17 @@ import (
 	"time"
 )
 
-// Watcher polls the X11 CLIPBOARD selection using `xclip` and emits
-// events whenever a new, distinct payload (text or image/png) appears.
+// Watcher polls the system clipboard and emits events whenever a new,
+// distinct payload (text or image/png) appears. It drives the clipboard
+// through external CLI tools — `xclip` on X11, `wl-paste` on Wayland —
+// selected at construction time by DetectServer.
 //
 // We deliberately avoid linking against libx11 / libxfixes via cgo so
-// the produced binary stays pure-Go and small. xclip is declared as a
-// runtime dependency in the .deb package.
+// the produced binary stays pure-Go and small. The tools are declared as
+// runtime dependencies in the .deb package.
 type Watcher struct {
 	interval time.Duration
+	server   Server
 
 	mu       sync.Mutex
 	lastHash string
@@ -45,6 +48,7 @@ func NewWatcher(interval time.Duration) *Watcher {
 	}
 	return &Watcher{
 		interval: interval,
+		server:   DetectServer(),
 		events:   make(chan Event, 16),
 	}
 }
@@ -55,8 +59,9 @@ func (w *Watcher) Events() <-chan Event { return w.events }
 // Start launches the poll loop. It returns immediately. Call Stop to
 // terminate it. Start is safe to call once per Watcher.
 func (w *Watcher) Start(ctx context.Context) error {
-	if _, err := exec.LookPath("xclip"); err != nil {
-		return fmt.Errorf("xclip not found in PATH: install it with 'sudo apt install xclip'")
+	if missing := MissingTools(w.server); len(missing) > 0 {
+		return fmt.Errorf("missing %s clipboard tools: %s (install %s)",
+			w.server, strings.Join(missing, ", "), installHint(w.server))
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	w.cancel = cancel
@@ -95,9 +100,9 @@ func (w *Watcher) loop(ctx context.Context) {
 }
 
 func (w *Watcher) tick(ctx context.Context) {
-	targets, _ := readTargets(ctx)
+	targets, _ := readTargets(ctx, w.server)
 	if hasTarget(targets, "image/png") {
-		img, err := readImage(ctx)
+		img, err := readImage(ctx, w.server)
 		if err == nil && len(img) > 0 {
 			h := hashBytes(img)
 			if w.swapHash(h) {
@@ -107,7 +112,7 @@ func (w *Watcher) tick(ctx context.Context) {
 			return
 		}
 	}
-	text, err := readText(ctx)
+	text, err := readText(ctx, w.server)
 	if err != nil || text == "" {
 		return
 	}
@@ -155,24 +160,51 @@ func hasTarget(targets []string, mime string) bool {
 	return false
 }
 
-func readTargets(ctx context.Context) ([]string, error) {
-	out, err := runCmd(ctx, "xclip", "-selection", "clipboard", "-t", "TARGETS", "-o")
+func readTargets(ctx context.Context, srv Server) ([]string, error) {
+	var out []byte
+	var err error
+	if srv == ServerWayland {
+		out, err = runCmd(ctx, "wl-paste", "--list-types")
+	} else {
+		out, err = runCmd(ctx, "xclip", "-selection", "clipboard", "-t", "TARGETS", "-o")
+	}
 	if err != nil {
 		return nil, err
 	}
 	return strings.Split(strings.TrimSpace(string(out)), "\n"), nil
 }
 
-func readText(ctx context.Context) (string, error) {
-	out, err := runCmd(ctx, "xclip", "-selection", "clipboard", "-o")
+func readText(ctx context.Context, srv Server) (string, error) {
+	var out []byte
+	var err error
+	if srv == ServerWayland {
+		// No --type: wl-paste auto-negotiates the best text flavour and
+		// handles charset conversion. --no-newline avoids the trailing \n
+		// it would otherwise append, matching xclip's raw output.
+		out, err = runCmd(ctx, "wl-paste", "--no-newline")
+	} else {
+		out, err = runCmd(ctx, "xclip", "-selection", "clipboard", "-o")
+	}
 	if err != nil {
 		return "", err
 	}
 	return string(out), nil
 }
 
-func readImage(ctx context.Context) ([]byte, error) {
+func readImage(ctx context.Context, srv Server) ([]byte, error) {
+	if srv == ServerWayland {
+		return runCmd(ctx, "wl-paste", "--no-newline", "--type", "image/png")
+	}
 	return runCmd(ctx, "xclip", "-selection", "clipboard", "-t", "image/png", "-o")
+}
+
+// installHint returns the apt package(s) that provide the clipboard tools
+// for a given server, used in user-facing "not installed" messages.
+func installHint(s Server) string {
+	if s == ServerWayland {
+		return "'sudo apt install wl-clipboard'"
+	}
+	return "'sudo apt install xclip'"
 }
 
 // runCmd executes a short-lived command, capturing stdout. It is tolerant

@@ -1,14 +1,19 @@
 # clipd — Linux Clipboard History
 
-A lightweight clipboard manager for X11 Linux (Debian / Ubuntu / Mint /
-Pop!\_OS) inspired by the Windows + V panel.
+A lightweight clipboard manager for Linux (Debian / Ubuntu / Mint /
+Pop!\_OS) inspired by the Windows + V panel. One binary for both **X11 and
+Wayland** — it detects the session and uses the matching clipboard backend.
 
 -   Text **and** image (PNG) history with thumbnails
 -   Pin items so they survive eviction; live search and All/Text/Images/Pinned filters
--   **Click / `Enter` to paste** — copies the item and auto-pastes it into your
-    previous app (via `xdotool`); separate **Copy** action that just copies
+-   **Click / `Enter` to paste** — copies the item and (on X11) auto-pastes it
+    into your previous app via `xdotool`; separate **Copy** action that just
+    copies. On Wayland it copies and you press `Ctrl+V` (Wayland blocks
+    synthetic input)
 -   Global hotkey (default `Super + V`) **and** a full CLI
-    (`clipd start|toggle|show|hide|quit|restart`) as the hotkey alternative
+    (`clipd start|toggle|show|hide|quit|restart`) as the hotkey alternative.
+    On Wayland the hotkey is registered with the desktop (auto on GNOME, or
+    `clipd install-shortcut`)
 -   System tray icon, auto-start on login, light / dark / auto theme
 -   Frameless window with a custom macOS-style title bar; runs as a normal
     taskbar window or a floating popup
@@ -32,7 +37,9 @@ This installs:
 
 It pulls in the runtime dependencies automatically (`libgtk-3-0`,
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, `libx11-6`, `xclip`,
-`xdotool`). Launch from your application menu or with:
+`xdotool`, `wl-clipboard`) and a system autostart entry at
+`/etc/xdg/autostart/clipd.desktop`, so it launches on your next login. Launch
+now from your application menu or with:
 
 ```bash
 clipd start

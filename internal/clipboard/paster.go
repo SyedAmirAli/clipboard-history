@@ -15,6 +15,14 @@ import (
 // runs, so if xdotool is missing we just return an error for the caller to log
 // and the user can still paste manually.
 func SendPaste() error {
+	// Wayland forbids arbitrary clients from synthesising input into other
+	// windows (there is no portable xdotool equivalent that works across
+	// GNOME, KDE and wlroots). The item is already on the clipboard by the
+	// time this runs, so we simply skip auto-paste and let the user press
+	// Ctrl+V themselves.
+	if IsWayland() {
+		return nil
+	}
 	path, err := exec.LookPath("xdotool")
 	if err != nil {
 		return fmt.Errorf("xdotool not found in PATH: install it with 'sudo apt install xdotool' to enable auto-paste")

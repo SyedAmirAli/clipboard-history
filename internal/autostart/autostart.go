@@ -1,13 +1,21 @@
-// Package autostart manages a freedesktop.org autostart .desktop entry
-// at $XDG_CONFIG_HOME/autostart/clipd.desktop so the app launches on
-// the user's next login.
+// Package autostart manages whether clipd launches on login.
+//
+// The .deb installs a system-wide entry at /etc/xdg/autostart/clipd.desktop,
+// so clipd autostarts for every user out of the box. The in-app toggle then
+// layers a per-user file at $XDG_CONFIG_HOME/autostart/clipd.desktop on top:
+// freedesktop precedence means the user entry overrides the system one, so we
+// disable autostart by writing a user entry with Hidden=true, and re-enable by
+// removing it again. When no system entry exists (e.g. a dev build run from
+// source) the user entry is a normal autostart file instead.
 package autostart
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"clipd/internal/config"
 )
@@ -15,20 +23,25 @@ import (
 // Default path of the installed binary on Debian/Ubuntu (via our .deb).
 const defaultExec = "/usr/bin/clipd"
 
-// desktopTemplate is the body written to ~/.config/autostart/clipd.desktop
-// when autostart is enabled. The fields here mirror the production
-// .desktop file shipped in the .deb.
+// systemEntry is where the .deb installs the system-wide autostart file.
+const systemEntry = "/etc/xdg/autostart/clipd.desktop"
+
+// desktopTemplate is the body written to ~/.config/autostart/clipd.desktop.
+// Exec uses `start` so login launches the daemon (a bare `clipd` would
+// toggle the window of an already-running instance). Hidden is set to true
+// to suppress a system-wide entry, false for a plain user autostart.
 const desktopTemplate = `[Desktop Entry]
 Type=Application
 Name=clipd
 GenericName=Clipboard History
 Comment=Lightweight clipboard history with pinning and image support
-Exec=%s
+Exec=%s start
 Icon=clipd
 Terminal=false
 Categories=Utility;
 StartupNotify=false
 X-GNOME-Autostart-enabled=true
+Hidden=%t
 `
 
 // Manager implements service.AutostartManager.
@@ -41,40 +54,64 @@ type Manager struct {
 // New returns a Manager that writes to the user's autostart directory.
 func New() *Manager { return &Manager{} }
 
-// SetEnabled writes or removes the autostart .desktop entry.
+// SetEnabled turns login autostart on or off, reconciling the per-user
+// entry against the system-wide one installed by the .deb.
 func (m *Manager) SetEnabled(enabled bool) error {
 	path, err := config.AutostartFilePath()
 	if err != nil {
 		return err
 	}
-	if !enabled {
-		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if enabled {
+		// With a system entry present, autostart is already the default —
+		// just drop any user override that was disabling it. Without one
+		// (dev build), write a plain user autostart entry.
+		if systemEntryExists() {
+			return removeIfExists(path)
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}
-		return nil
+		return os.WriteFile(path, []byte(formatDesktop(m.execPath(), false)), 0o644)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+	// Disabling: override the system entry with a Hidden user entry, or —
+	// if there's no system entry — simply remove the user one.
+	if systemEntryExists() {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(path, []byte(formatDesktop(m.execPath(), true)), 0o644)
 	}
-	exec := m.execPath()
-	body := []byte(formatDesktop(exec))
-	return os.WriteFile(path, body, 0o644)
+	return removeIfExists(path)
 }
 
-// IsEnabled returns true when the autostart entry exists.
+// IsEnabled reports whether clipd will autostart on the next login. A user
+// entry takes precedence (Hidden=true means disabled); with no user entry,
+// autostart is on iff the system-wide entry exists.
 func (m *Manager) IsEnabled() (bool, error) {
 	path, err := config.AutostartFilePath()
 	if err != nil {
 		return false, err
 	}
-	_, err = os.Stat(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
+	data, err := os.ReadFile(path)
+	if err == nil {
+		return !strings.Contains(string(data), "Hidden=true"), nil
 	}
-	if err != nil {
+	if !errors.Is(err, fs.ErrNotExist) {
 		return false, err
 	}
-	return true, nil
+	return systemEntryExists(), nil
+}
+
+func systemEntryExists() bool {
+	_, err := os.Stat(systemEntry)
+	return err == nil
+}
+
+func removeIfExists(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func (m *Manager) execPath() string {
@@ -93,24 +130,6 @@ func (m *Manager) execPath() string {
 	return defaultExec
 }
 
-func formatDesktop(execPath string) string {
-	return replaceFirst(desktopTemplate, "%s", execPath)
-}
-
-// replaceFirst is a tiny helper to avoid pulling in fmt for a single sub.
-func replaceFirst(s, old, new string) string {
-	i := indexOf(s, old)
-	if i < 0 {
-		return s
-	}
-	return s[:i] + new + s[i+len(old):]
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
+func formatDesktop(execPath string, hidden bool) string {
+	return fmt.Sprintf(desktopTemplate, execPath, hidden)
 }

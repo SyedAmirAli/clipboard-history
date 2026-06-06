@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -25,6 +26,7 @@ import (
 	"clipd/internal/hotkey"
 	"clipd/internal/ipc"
 	"clipd/internal/service"
+	"clipd/internal/shortcut"
 	"clipd/internal/tray"
 )
 
@@ -76,6 +78,24 @@ func main() {
 				log.Fatalf("clipd: failed to relaunch: %v", err)
 			}
 			log.Println("clipd: restarted")
+			return
+		case "install-shortcut":
+			// Register the desktop-level global shortcut (GNOME/Wayland). The
+			// optional second arg overrides the key spec, default Super+V.
+			spec := "Super+V"
+			if len(os.Args) > 2 {
+				spec = os.Args[2]
+			}
+			if err := shortcut.EnsureInstalled(spec); err != nil {
+				log.Fatalf("clipd: install-shortcut: %v", err)
+			}
+			log.Printf("clipd: installed shortcut %q → clipd toggle", spec)
+			return
+		case "remove-shortcut":
+			if err := shortcut.Remove(); err != nil {
+				log.Fatalf("clipd: remove-shortcut: %v", err)
+			}
+			log.Println("clipd: removed desktop shortcut")
 			return
 		case "-h", "--help", "help":
 			printUsage()
@@ -162,9 +182,9 @@ func main() {
 // appWiring holds long-lived components so the OnStartup/OnShutdown
 // hooks can finish wiring them up against the Wails context.
 type appWiring struct {
-	svc      *service.Service
-	watcher  *clipboard.Watcher
-	hotkey   *hotkey.Manager
+	svc         *service.Service
+	watcher     *clipboard.Watcher
+	hotkey      *hotkey.Manager
 	sockPath    string
 	ipcLn       *ipc.Listener
 	quitting    atomic.Bool
@@ -228,26 +248,37 @@ func (a *appWiring) onStartup(ctx context.Context) {
 		}
 	}
 
-	// Hard-fail-soft on Wayland: clipboard monitoring and X11 hotkeys
-	// won't work; surface a friendly message and continue in tray-only
-	// mode (the user can still open the window via the tray icon).
-	sessType := os.Getenv("XDG_SESSION_TYPE")
-	wayland := sessType == "wayland"
+	// Clipboard capture works on both X11 (xclip) and Wayland (wl-clipboard);
+	// the watcher picks the backend itself. Surface a friendly message if the
+	// required tools aren't installed instead of failing silently.
+	server := clipboard.DetectServer()
+	if missing := clipboard.MissingTools(server); len(missing) > 0 {
+		msg := fmt.Sprintf("Clipboard tools missing for %s session: %s. Install them to capture history.",
+			server, strings.Join(missing, ", "))
+		log.Print(msg)
+		wailsruntime.LogWarning(ctx, msg)
+	}
+	if err := a.watcher.Start(ctx); err != nil {
+		log.Printf("watcher start: %v", err)
+		wailsruntime.LogWarning(ctx, "Failed to start clipboard watcher: "+err.Error())
+	}
+	go a.consumeClipboard(ctx)
 
-	if !wayland {
-		settings := a.svc.CurrentSettings()
+	settings := a.svc.CurrentSettings()
+	if server == clipboard.ServerWayland {
+		// Wayland forbids X11-style global key grabs, so register the shortcut
+		// with the desktop (GNOME via gsettings) to run `clipd toggle`. On
+		// other desktops, tell the user how to bind it themselves.
+		if err := shortcut.EnsureInstalled(settings.Hotkey); err != nil {
+			log.Printf("desktop shortcut: %v", err)
+			wailsruntime.LogWarning(ctx, "Global hotkey needs a desktop binding on Wayland. "+err.Error())
+		}
+	} else {
 		if err := a.hotkey.Register(settings.Hotkey); err != nil {
 			log.Printf("hotkey register: %v", err)
 			wailsruntime.LogWarning(ctx, "Failed to register hotkey: "+err.Error())
 		}
-		if err := a.watcher.Start(ctx); err != nil {
-			log.Printf("watcher start: %v", err)
-			wailsruntime.LogWarning(ctx, "Failed to start clipboard watcher: "+err.Error())
-		}
-		go a.consumeClipboard(ctx)
 		go a.consumeHotkey(ctx)
-	} else {
-		wailsruntime.LogWarning(ctx, "Running on Wayland — global hotkey and background clipboard monitoring are disabled. Use the tray icon to open the popup.")
 	}
 
 	tray.Start(tray.Callbacks{
@@ -301,11 +332,18 @@ Usage:
   clipd hide       Hide the popup
   clipd quit       Fully shut down the running instance (aliases: exit, stop)
   clipd restart    Shut down the running instance and start a fresh one
+  clipd install-shortcut [spec]
+                   Bind a desktop global shortcut (GNOME/Wayland) to
+                   "clipd toggle". Defaults to Super+V.
+  clipd remove-shortcut
+                   Remove the desktop global shortcut installed above
   clipd help       Print this help
 
 The toggle/show/hide commands are the command-line alternative to the
 global Super+V hotkey — bind "clipd toggle" to any shortcut your desktop
-(or, under WSL, Windows) provides.
+(or, under WSL, Windows) provides. On Wayland the X11 hotkey grab can't
+work, so clipd auto-installs the shortcut on GNOME; use install-shortcut
+for other desktops or to rebind it.
 `)
 }
 

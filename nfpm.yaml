@@ -26,8 +26,12 @@ depends:
   - libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
   - libayatana-appindicator3-1
   - libx11-6
+  # X11 backend (xclip/xdotool) and Wayland backend (wl-clipboard) are both
+  # pulled in: clipd is a single binary that picks the right one at runtime
+  # depending on the session, so both must be available.
   - xclip
   - xdotool
+  - wl-clipboard
 
 recommends:
   - libnotify-bin
@@ -45,5 +49,12 @@ contents:
 
   - src: ./build/linux/clipd.desktop
     dst: /usr/share/applications/clipd.desktop
+    file_info:
+      mode: 0644
+
+  # System-wide autostart: launches clipd on login for every user. The
+  # in-app autostart toggle layers a per-user override on top of this.
+  - src: ./build/linux/clipd-autostart.desktop
+    dst: /etc/xdg/autostart/clipd.desktop
     file_info:
       mode: 0644

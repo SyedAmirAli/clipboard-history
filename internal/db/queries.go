@@ -17,11 +17,29 @@ var ErrNotFound = errors.New("not found")
 // know whether the operation created a new row, bumped an existing one
 // to the top, or was a no-op (current top item is identical).
 type AddTextResult struct {
-	ID       int64
-	IsNew    bool
-	WasNoop  bool
-	WasBump  bool
+	ID        int64
+	IsNew     bool
+	WasNoop   bool
+	WasBump   bool
 	WasPinned bool
+}
+
+// FullItem is a complete clipboard row, including the image blob that is
+// intentionally omitted from normal list payloads.
+type FullItem struct {
+	Item      clipboard.Item
+	ImageBlob []byte
+}
+
+// VaultEntry is an encrypted private vault row.
+type VaultEntry struct {
+	ID          int64
+	ContentType clipboard.ContentType
+	Payload     []byte
+	Nonce       []byte
+	ContentHash string
+	CreatedAt   int64
+	LastUsedAt  int64
 }
 
 // AddText inserts a text item or bumps the existing row with the same
@@ -147,6 +165,31 @@ func (s *Store) GetForPaste(id int64) (clipboard.ContentType, string, []byte, er
 	return ct, text.String, blob, nil
 }
 
+// GetFull returns the complete row without bumping last_used_at. It is used
+// when moving an item out of normal history and into the encrypted vault.
+func (s *Store) GetFull(id int64) (FullItem, error) {
+	var out FullItem
+	var pinned int
+	var text sql.NullString
+	err := s.db.QueryRow(`
+		SELECT id, content_type, text_content, image_blob, COALESCE(image_thumb,''),
+		       image_w, image_h, content_hash, pinned, created_at, last_used_at
+		FROM items
+		WHERE id = ?
+	`, id).Scan(&out.Item.ID, &out.Item.ContentType, &text, &out.ImageBlob, &out.Item.ImageThumb,
+		&out.Item.ImageW, &out.Item.ImageH, &out.Item.ContentHash, &pinned, &out.Item.CreatedAt, &out.Item.LastUsedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return FullItem{}, ErrNotFound
+	}
+	if err != nil {
+		return FullItem{}, err
+	}
+	out.Item.TextContent = text.String
+	out.Item.Pinned = pinned == 1
+	out.Item.Preview = makePreview(out.Item)
+	return out, nil
+}
+
 // SetPinned toggles the pinned flag for a row.
 func (s *Store) SetPinned(id int64, pinned bool) error {
 	v := 0
@@ -176,6 +219,83 @@ func (s *Store) ClearAll(keepPinned bool) error {
 		return err
 	}
 	_, err := s.db.Exec(`DELETE FROM items`)
+	return err
+}
+
+// AddVaultEntry stores a pre-encrypted vault payload.
+func (s *Store) AddVaultEntry(contentType clipboard.ContentType, payload, nonce []byte, hash string) (int64, error) {
+	now := time.Now().Unix()
+	res, err := s.db.Exec(
+		`INSERT INTO vault_entries (content_type, payload, nonce, content_hash, created_at, last_used_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		contentType, payload, nonce, hash, now, now,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("insert vault entry: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	return id, nil
+}
+
+// ListVaultEntries returns encrypted vault rows ordered by recent use.
+func (s *Store) ListVaultEntries() ([]VaultEntry, error) {
+	rows, err := s.db.Query(`
+		SELECT id, content_type, payload, nonce, content_hash, created_at, last_used_at
+		FROM vault_entries
+		ORDER BY last_used_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list vault entries: %w", err)
+	}
+	defer rows.Close()
+	var out []VaultEntry
+	for rows.Next() {
+		var entry VaultEntry
+		if err := rows.Scan(&entry.ID, &entry.ContentType, &entry.Payload, &entry.Nonce,
+			&entry.ContentHash, &entry.CreatedAt, &entry.LastUsedAt); err != nil {
+			return nil, fmt.Errorf("scan vault entry: %w", err)
+		}
+		out = append(out, entry)
+	}
+	return out, rows.Err()
+}
+
+// GetVaultEntry returns one encrypted vault row and bumps its last_used_at.
+func (s *Store) GetVaultEntry(id int64) (VaultEntry, error) {
+	var entry VaultEntry
+	err := s.db.QueryRow(`
+		SELECT id, content_type, payload, nonce, content_hash, created_at, last_used_at
+		FROM vault_entries
+		WHERE id = ?
+	`, id).Scan(&entry.ID, &entry.ContentType, &entry.Payload, &entry.Nonce,
+		&entry.ContentHash, &entry.CreatedAt, &entry.LastUsedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return VaultEntry{}, ErrNotFound
+	}
+	if err != nil {
+		return VaultEntry{}, err
+	}
+	now := time.Now().Unix()
+	if _, err := s.db.Exec(`UPDATE vault_entries SET last_used_at = ? WHERE id = ?`, now, id); err != nil {
+		return VaultEntry{}, fmt.Errorf("bump vault last_used_at: %w", err)
+	}
+	entry.LastUsedAt = now
+	return entry, nil
+}
+
+// DeleteVaultEntry removes a vault row by id.
+func (s *Store) DeleteVaultEntry(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM vault_entries WHERE id = ?`, id)
+	return err
+}
+
+// ResetVault removes all private vault entries and vault configuration while
+// leaving normal clipboard history and app settings intact.
+func (s *Store) ResetVault() error {
+	_, err := s.db.Exec(`
+		DELETE FROM vault_entries;
+		DELETE FROM settings WHERE key = 'private_vault';
+	`)
 	return err
 }
 

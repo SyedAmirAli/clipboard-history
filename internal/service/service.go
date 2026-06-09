@@ -12,6 +12,8 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	"clipd/internal/clipboard"
 	"clipd/internal/db"
 	"clipd/internal/thumbnail"
+	"clipd/internal/vault"
 )
 
 // EventNewItem is the Wails event published whenever a new clipboard
@@ -28,6 +31,15 @@ const EventNewItem = "clipboard:new-item"
 
 // EventCleared is published after the user clears the history.
 const EventCleared = "clipboard:cleared"
+
+// EventVaultChanged is published when vault setup, lock state, or entries change.
+const EventVaultChanged = "vault:changed"
+
+const (
+	vaultSettingsKey      = "private_vault"
+	vaultInactivityPeriod = 5 * time.Minute
+	vaultSuppressTTL      = 2 * time.Minute
+)
 
 // HotkeySetter abstracts the hotkey manager so the service can update
 // the registered shortcut when settings change.
@@ -50,18 +62,23 @@ type AutostartManager interface {
 
 // Service is bound onto the Wails runtime. All methods are JS-callable.
 type Service struct {
-	store       *db.Store
-	hotkeyMgr   HotkeySetter
-	suppressor  WatcherSuppressor
-	autostart   AutostartManager
-	visible     atomic.Bool
-	ctx         context.Context
-	settingsLog atomic.Value // last loaded clipboard.Settings, for hotkey diffing
+	store         *db.Store
+	hotkeyMgr     HotkeySetter
+	suppressor    WatcherSuppressor
+	autostart     AutostartManager
+	visible       atomic.Bool
+	ctx           context.Context
+	settingsLog   atomic.Value // last loaded clipboard.Settings, for hotkey diffing
+	vaultMu       sync.Mutex
+	vaultKey      []byte
+	vaultExpiry   time.Time
+	pendingSetup  *vault.SetupBundle
+	vaultSuppress map[string]time.Time
 }
 
 // New constructs a Service with all wiring dependencies.
 func New(store *db.Store, hk HotkeySetter, sup WatcherSuppressor, as AutostartManager) *Service {
-	return &Service{store: store, hotkeyMgr: hk, suppressor: sup, autostart: as}
+	return &Service{store: store, hotkeyMgr: hk, suppressor: sup, autostart: as, vaultSuppress: map[string]time.Time{}}
 }
 
 // AttachContext is called from Wails OnStartup so subsequent Show/Hide
@@ -78,6 +95,9 @@ func (s *Service) Context() context.Context { return s.ctx }
 // reports a new text payload. It stores the item, enforces the
 // max-items cap, and publishes a refresh event to the UI.
 func (s *Service) IngestText(text, hash string) error {
+	if s.isVaultSuppressed(hash) {
+		return nil
+	}
 	settings := s.CurrentSettings()
 	res, err := s.store.AddText(text, hash)
 	if err != nil {
@@ -93,6 +113,9 @@ func (s *Service) IngestText(text, hash string) error {
 // IngestImage is invoked by the main loop for image clipboard payloads.
 // It auto-rejects images larger than the user-configured cap.
 func (s *Service) IngestImage(png []byte, hash string) error {
+	if s.isVaultSuppressed(hash) {
+		return nil
+	}
 	settings := s.CurrentSettings()
 	if !settings.KeepImages {
 		return nil
@@ -120,6 +143,13 @@ func (s *Service) emitNewItem() {
 		return
 	}
 	wailsruntime.EventsEmit(s.ctx, EventNewItem)
+}
+
+func (s *Service) emitVaultChanged() {
+	if s.ctx == nil {
+		return
+	}
+	wailsruntime.EventsEmit(s.ctx, EventVaultChanged)
 }
 
 // ----- Bound methods (called from JS) -----
@@ -207,6 +237,281 @@ func (s *Service) DeleteItem(id int64) error {
 	if hash != "" {
 		s.suppressor.Suppress(hash)
 	}
+	return nil
+}
+
+// ----- Private Vault -----
+
+type VaultStatus struct {
+	Configured     bool  `json:"configured"`
+	Unlocked       bool  `json:"unlocked"`
+	FailedAttempts int   `json:"failedAttempts"`
+	LockedUntil    int64 `json:"lockedUntil,omitempty"`
+}
+
+type VaultEntryView struct {
+	ID          int64                 `json:"id"`
+	ContentType clipboard.ContentType `json:"contentType"`
+	Preview     string                `json:"preview"`
+	ImageThumb  string                `json:"imageThumb,omitempty"`
+	ImageW      int                   `json:"imageW,omitempty"`
+	ImageH      int                   `json:"imageH,omitempty"`
+	CreatedAt   int64                 `json:"createdAt"`
+	LastUsedAt  int64                 `json:"lastUsedAt"`
+}
+
+type VaultSecretView struct {
+	ContentType clipboard.ContentType `json:"contentType"`
+	Text        string                `json:"text,omitempty"`
+}
+
+func (s *Service) VaultStatus() (VaultStatus, error) {
+	meta, err := s.vaultMetadata()
+	if err != nil {
+		return VaultStatus{}, err
+	}
+	return VaultStatus{
+		Configured:     meta.Configured,
+		Unlocked:       s.vaultUnlocked(),
+		FailedAttempts: meta.FailedAttempts,
+		LockedUntil:    lockoutUntil(meta),
+	}, nil
+}
+
+func (s *Service) StartVaultSetup() (vault.SetupBundle, error) {
+	bundle, err := vault.NewSetupBundle("Private Vault")
+	if err != nil {
+		return vault.SetupBundle{}, err
+	}
+	s.vaultMu.Lock()
+	s.pendingSetup = &bundle
+	s.vaultMu.Unlock()
+	return bundle, nil
+}
+
+func (s *Service) ConfirmVaultSetup(pin, confirm, code string) (VaultStatus, error) {
+	if strings.TrimSpace(pin) == "" {
+		return VaultStatus{}, errors.New("PIN/password is required")
+	}
+	if pin != confirm {
+		return VaultStatus{}, errors.New("PIN/password confirmation does not match")
+	}
+	s.vaultMu.Lock()
+	pending := s.pendingSetup
+	s.vaultMu.Unlock()
+	if pending == nil {
+		return VaultStatus{}, errors.New("vault setup has not been started")
+	}
+	if !vault.ValidTOTP(pending.Secret, code, time.Now()) {
+		return VaultStatus{}, vault.ErrInvalidCode
+	}
+	meta, key, err := vault.NewMetadata(pin, pending.Secret)
+	if err != nil {
+		return VaultStatus{}, err
+	}
+	if err := s.saveVaultMetadata(meta); err != nil {
+		return VaultStatus{}, err
+	}
+	s.vaultMu.Lock()
+	s.vaultKey = key
+	s.vaultExpiry = time.Now().Add(vaultInactivityPeriod)
+	s.pendingSetup = nil
+	s.vaultMu.Unlock()
+	s.emitVaultChanged()
+	return s.VaultStatus()
+}
+
+func (s *Service) UnlockVaultWithPIN(pin string) (VaultStatus, error) {
+	meta, err := s.vaultMetadata()
+	if err != nil {
+		return VaultStatus{}, err
+	}
+	if err := ensureCanAttempt(meta); err != nil {
+		return VaultStatus{}, err
+	}
+	if !meta.VerifyPIN(pin) {
+		_ = s.recordVaultFailure(meta)
+		return VaultStatus{}, vault.ErrInvalidPIN
+	}
+	key, err := meta.VaultKey()
+	if err != nil {
+		return VaultStatus{}, err
+	}
+	meta.FailedAttempts = 0
+	meta.LastFailedAt = 0
+	_ = s.saveVaultMetadata(meta)
+	s.setVaultKey(key)
+	s.emitVaultChanged()
+	return s.VaultStatus()
+}
+
+func (s *Service) UnlockVaultWithCode(code string) (VaultStatus, error) {
+	meta, key, err := s.verifyVaultCode(code)
+	if err != nil {
+		return VaultStatus{}, err
+	}
+	meta.FailedAttempts = 0
+	meta.LastFailedAt = 0
+	_ = s.saveVaultMetadata(meta)
+	s.setVaultKey(key)
+	s.emitVaultChanged()
+	return s.VaultStatus()
+}
+
+func (s *Service) ResetVaultPIN(code, pin, confirm string) (VaultStatus, error) {
+	if strings.TrimSpace(pin) == "" {
+		return VaultStatus{}, errors.New("PIN/password is required")
+	}
+	if pin != confirm {
+		return VaultStatus{}, errors.New("PIN/password confirmation does not match")
+	}
+	meta, key, err := s.verifyVaultCode(code)
+	if err != nil {
+		return VaultStatus{}, err
+	}
+	meta, err = meta.WithNewPIN(pin)
+	if err != nil {
+		return VaultStatus{}, err
+	}
+	if err := s.saveVaultMetadata(meta); err != nil {
+		return VaultStatus{}, err
+	}
+	s.setVaultKey(key)
+	s.emitVaultChanged()
+	return s.VaultStatus()
+}
+
+func (s *Service) LockVault() error {
+	s.vaultMu.Lock()
+	s.vaultKey = nil
+	s.vaultExpiry = time.Time{}
+	s.vaultMu.Unlock()
+	s.emitVaultChanged()
+	return nil
+}
+
+func (s *Service) ListVaultItems() ([]VaultEntryView, error) {
+	key, err := s.requireVaultKey()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.store.ListVaultEntries()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]VaultEntryView, 0, len(rows))
+	for _, row := range rows {
+		plain, err := vault.OpenEntry(key, row.Payload, row.Nonce)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, VaultEntryView{
+			ID:          row.ID,
+			ContentType: clipboard.ContentType(plain.ContentType),
+			Preview:     vaultPreview(plain),
+			ImageThumb:  plain.ImageThumb,
+			ImageW:      plain.ImageW,
+			ImageH:      plain.ImageH,
+			CreatedAt:   row.CreatedAt,
+			LastUsedAt:  row.LastUsedAt,
+		})
+	}
+	return out, nil
+}
+
+func (s *Service) MoveItemToVault(id int64) error {
+	key, err := s.requireVaultKey()
+	if err != nil {
+		return err
+	}
+	full, err := s.store.GetFull(id)
+	if err != nil {
+		return err
+	}
+	plain := vault.PlainEntry{
+		ContentType: string(full.Item.ContentType),
+		Text:        full.Item.TextContent,
+		ImagePNG:    full.ImageBlob,
+		ImageThumb:  full.Item.ImageThumb,
+		ImageW:      full.Item.ImageW,
+		ImageH:      full.Item.ImageH,
+	}
+	payload, nonce, err := vault.SealEntry(key, plain)
+	if err != nil {
+		return err
+	}
+	if _, err := s.store.AddVaultEntry(full.Item.ContentType, payload, nonce, full.Item.ContentHash); err != nil {
+		return err
+	}
+	hash, err := s.store.Delete(id)
+	if err != nil {
+		return err
+	}
+	if hash != "" {
+		s.suppressVaultHash(hash)
+	}
+	s.emitNewItem()
+	s.emitVaultChanged()
+	return nil
+}
+
+func (s *Service) CopyVaultItem(id int64) error {
+	key, err := s.requireVaultKey()
+	if err != nil {
+		return err
+	}
+	row, err := s.store.GetVaultEntry(id)
+	if err != nil {
+		return err
+	}
+	plain, err := vault.OpenEntry(key, row.Payload, row.Nonce)
+	if err != nil {
+		return err
+	}
+	switch clipboard.ContentType(plain.ContentType) {
+	case clipboard.ContentTypeText:
+		hash := vault.HashText(plain.Text)
+		s.suppressVaultHash(hash)
+		return clipboard.WriteText(plain.Text)
+	case clipboard.ContentTypeImage:
+		hash := vault.HashImage(plain.ImagePNG)
+		s.suppressVaultHash(hash)
+		return clipboard.WriteImagePNG(plain.ImagePNG)
+	default:
+		return fmt.Errorf("unknown vault content_type: %s", plain.ContentType)
+	}
+}
+
+func (s *Service) RevealVaultItem(id int64) (VaultSecretView, error) {
+	key, err := s.requireVaultKey()
+	if err != nil {
+		return VaultSecretView{}, err
+	}
+	row, err := s.store.GetVaultEntry(id)
+	if err != nil {
+		return VaultSecretView{}, err
+	}
+	plain, err := vault.OpenEntry(key, row.Payload, row.Nonce)
+	if err != nil {
+		return VaultSecretView{}, err
+	}
+	if clipboard.ContentType(plain.ContentType) != clipboard.ContentTypeText {
+		return VaultSecretView{ContentType: clipboard.ContentType(plain.ContentType)}, nil
+	}
+	return VaultSecretView{
+		ContentType: clipboard.ContentType(plain.ContentType),
+		Text:        plain.Text,
+	}, nil
+}
+
+func (s *Service) DeleteVaultItem(id int64) error {
+	if _, err := s.requireVaultKey(); err != nil {
+		return err
+	}
+	if err := s.store.DeleteVaultEntry(id); err != nil {
+		return err
+	}
+	s.emitVaultChanged()
 	return nil
 }
 
@@ -315,6 +620,154 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 	}
 	s.settingsLog.Store(in)
 	return in, nil
+}
+
+func (s *Service) vaultMetadata() (vault.Metadata, error) {
+	raw, err := s.store.GetSetting(vaultSettingsKey, "")
+	if err != nil {
+		return vault.Metadata{}, err
+	}
+	return vault.DecodeMetadata(raw)
+}
+
+func (s *Service) saveVaultMetadata(meta vault.Metadata) error {
+	raw, err := vault.EncodeMetadata(meta)
+	if err != nil {
+		return err
+	}
+	return s.store.SetSetting(vaultSettingsKey, raw)
+}
+
+func (s *Service) vaultUnlocked() bool {
+	s.vaultMu.Lock()
+	defer s.vaultMu.Unlock()
+	if len(s.vaultKey) == 0 {
+		return false
+	}
+	if time.Now().After(s.vaultExpiry) {
+		s.vaultKey = nil
+		s.vaultExpiry = time.Time{}
+		return false
+	}
+	return true
+}
+
+func (s *Service) setVaultKey(key []byte) {
+	s.vaultMu.Lock()
+	defer s.vaultMu.Unlock()
+	s.vaultKey = append([]byte(nil), key...)
+	s.vaultExpiry = time.Now().Add(vaultInactivityPeriod)
+}
+
+func (s *Service) requireVaultKey() ([]byte, error) {
+	s.vaultMu.Lock()
+	defer s.vaultMu.Unlock()
+	if len(s.vaultKey) == 0 || time.Now().After(s.vaultExpiry) {
+		s.vaultKey = nil
+		s.vaultExpiry = time.Time{}
+		return nil, errors.New("private vault is locked")
+	}
+	s.vaultExpiry = time.Now().Add(vaultInactivityPeriod)
+	return append([]byte(nil), s.vaultKey...), nil
+}
+
+func (s *Service) verifyVaultCode(code string) (vault.Metadata, []byte, error) {
+	meta, err := s.vaultMetadata()
+	if err != nil {
+		return vault.Metadata{}, nil, err
+	}
+	if !meta.Configured {
+		return vault.Metadata{}, nil, errors.New("private vault is not configured")
+	}
+	if err := ensureCanAttempt(meta); err != nil {
+		return vault.Metadata{}, nil, err
+	}
+	secret, err := meta.TOTPSecret()
+	if err != nil {
+		return vault.Metadata{}, nil, err
+	}
+	if !vault.ValidTOTP(secret, code, time.Now()) {
+		_ = s.recordVaultFailure(meta)
+		return vault.Metadata{}, nil, vault.ErrInvalidCode
+	}
+	key, err := meta.VaultKey()
+	if err != nil {
+		return vault.Metadata{}, nil, err
+	}
+	return meta, key, nil
+}
+
+func (s *Service) recordVaultFailure(meta vault.Metadata) error {
+	meta.FailedAttempts++
+	meta.LastFailedAt = time.Now().Unix()
+	return s.saveVaultMetadata(meta)
+}
+
+func ensureCanAttempt(meta vault.Metadata) error {
+	until := lockoutUntil(meta)
+	if until > time.Now().Unix() {
+		return fmt.Errorf("too many failed attempts; try again later")
+	}
+	return nil
+}
+
+func lockoutUntil(meta vault.Metadata) int64 {
+	if meta.FailedAttempts < 5 || meta.LastFailedAt == 0 {
+		return 0
+	}
+	return meta.LastFailedAt + 60
+}
+
+func vaultPreview(entry vault.PlainEntry) string {
+	switch clipboard.ContentType(entry.ContentType) {
+	case clipboard.ContentTypeImage:
+		if entry.ImageW > 0 && entry.ImageH > 0 {
+			return fmt.Sprintf("Image %dx%d", entry.ImageW, entry.ImageH)
+		}
+		return "Image"
+	default:
+		s := strings.ReplaceAll(entry.Text, "\r", " ")
+		s = strings.ReplaceAll(s, "\n", " ")
+		s = strings.ReplaceAll(s, "\t", " ")
+		s = strings.Join(strings.Fields(s), " ")
+		if len(s) > 80 {
+			s = s[:80] + "..."
+		}
+		return s
+	}
+}
+
+func (s *Service) suppressVaultHash(hash string) {
+	if hash == "" {
+		return
+	}
+	if s.suppressor != nil {
+		s.suppressor.Suppress(hash)
+	}
+	s.vaultMu.Lock()
+	defer s.vaultMu.Unlock()
+	s.vaultSuppress[hash] = time.Now().Add(vaultSuppressTTL)
+}
+
+func (s *Service) isVaultSuppressed(hash string) bool {
+	if hash == "" {
+		return false
+	}
+	now := time.Now()
+	s.vaultMu.Lock()
+	defer s.vaultMu.Unlock()
+	for h, until := range s.vaultSuppress {
+		if now.After(until) {
+			delete(s.vaultSuppress, h)
+		}
+	}
+	until, ok := s.vaultSuppress[hash]
+	if !ok || now.After(until) {
+		delete(s.vaultSuppress, hash)
+		return false
+	}
+	delete(s.vaultSuppress, hash)
+	return true
 }
 
 // ----- Window control -----

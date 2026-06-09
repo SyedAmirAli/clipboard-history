@@ -79,6 +79,15 @@ func main() {
 			}
 			log.Println("clipd: restarted")
 			return
+		case "reset-vault":
+			if ipc.IsRunning(sockPath) {
+				log.Fatal("clipd: running instance detected; run 'clipd quit' before reset-vault")
+			}
+			if err := resetVault(); err != nil {
+				log.Fatalf("clipd: reset-vault: %v", err)
+			}
+			log.Println("clipd: private vault reset")
+			return
 		case "install-shortcut":
 			// Register the desktop-level global shortcut (GNOME/Wayland). The
 			// optional second arg overrides the key spec, default Super+V.
@@ -177,6 +186,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("wails run: %v", err)
 	}
+}
+
+func resetVault() error {
+	dbPath, err := config.DBPath()
+	if err != nil {
+		return fmt.Errorf("resolve db path: %w", err)
+	}
+	store, err := db.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("open db: %w", err)
+	}
+	defer store.Close()
+	return store.ResetVault()
 }
 
 // appWiring holds long-lived components so the OnStartup/OnShutdown
@@ -332,6 +354,8 @@ Usage:
   clipd hide       Hide the popup
   clipd quit       Fully shut down the running instance (aliases: exit, stop)
   clipd restart    Shut down the running instance and start a fresh one
+  clipd reset-vault
+                   Delete private vault setup and vault entries only
   clipd install-shortcut [spec]
                    Bind a desktop global shortcut (GNOME/Wayland) to
                    "clipd toggle". Defaults to Super+V.

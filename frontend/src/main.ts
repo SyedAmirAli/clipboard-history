@@ -11,6 +11,7 @@ import { createItemList } from "./components/itemList";
 import { createContextMenu } from "./components/itemContextMenu";
 import { createSettingsModal } from "./components/settingsModal";
 import { createConfirm } from "./components/confirmModal";
+import { createVaultPanel } from "./components/vaultPanel";
 import type { AppSettings, ClipItem } from "./types";
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -19,6 +20,7 @@ const els = {
     app: $<HTMLElement>("#app"),
     searchInput: $<HTMLInputElement>("#search"),
     list: $<HTMLElement>("#list"),
+    vaultModal: $<HTMLElement>("#vault-modal"),
     chips: $<HTMLElement>("#chips"),
     ctxMenu: $<HTMLElement>("#ctx-menu"),
     settings: $<HTMLElement>("#settings-modal"),
@@ -26,6 +28,7 @@ const els = {
     mainContent: $<HTMLElement>("#main-content"),
     toast: $<HTMLElement>("#toast"),
     openSettings: $<HTMLButtonElement>("#open-settings"),
+    openVault: $<HTMLButtonElement>("#open-vault"),
     winClose: $<HTMLButtonElement>("#win-close"),
     winMin: $<HTMLButtonElement>("#win-min"),
     winMax: $<HTMLButtonElement>("#win-max"),
@@ -96,6 +99,35 @@ async function doDelete(item: ClipItem) {
     }
 }
 
+async function doMoveToVault(item: ClipItem) {
+    const unlocked = await vaultPanel.ensureUnlocked();
+    if (!unlocked) return;
+    try {
+        await api.moveItemToVault(item.id);
+        await refresh();
+        await vaultPanel.refresh();
+        flash("Moved to Private Vault");
+    } catch (err) {
+        flash("Move failed: " + String(err));
+    }
+}
+
+const vaultPanel = createVaultPanel(els.vaultModal, {
+    status: () => api.vaultStatus(),
+    startSetup: () => api.startVaultSetup(),
+    confirmSetup: (pin, confirmPIN, code) => api.confirmVaultSetup(pin, confirmPIN, code),
+    unlockPIN: (pin) => api.unlockVaultWithPIN(pin),
+    unlockCode: (code) => api.unlockVaultWithCode(code),
+    resetPIN: (code, pin, confirmPIN) => api.resetVaultPIN(code, pin, confirmPIN),
+    lock: () => api.lockVault(),
+    list: () => api.listVaultItems(),
+    copy: (id) => api.copyVaultItem(id),
+    reveal: (id) => api.revealVaultItem(id),
+    delete: (id) => api.deleteVaultItem(id),
+    flash,
+    chrome: { scrim: els.scrim, mainContent: els.mainContent },
+});
+
 const list = createItemList(els.list, {
     onPaste: doPaste,
     onCopy: doCopy,
@@ -103,6 +135,7 @@ const list = createItemList(els.list, {
         await api.pinItem(item.id, !item.pinned);
         await refresh();
     },
+    onMoveToVault: doMoveToVault,
     onDelete: doDelete,
     onContextMenu: (at, item) => ctxMenu.open(at, item),
 });
@@ -113,6 +146,7 @@ const ctxMenu = createContextMenu(els.ctxMenu, {
         await api.pinItem(item.id, !item.pinned);
         await refresh();
     },
+    onMoveToVault: doMoveToVault,
     onDelete: doDelete,
 });
 
@@ -126,6 +160,29 @@ search.onKeyToList((e) => list.handleKey(e));
 els.list.addEventListener("keydown", (e) => list.handleKey(e));
 
 els.openSettings.addEventListener("click", () => settings.open());
+els.openVault.addEventListener("click", () => vaultPanel.open());
+
+// Tiny credit bar: open developer portfolio / GitHub repo in system browser.
+// Falls back to copying the URL onto the clipboard if the browser can't be
+// launched, and surfaces the result as a toast.
+document.querySelectorAll<HTMLElement>(".credit-link").forEach((el) => {
+    el.addEventListener("click", async (e) => {
+        const trigger = e.currentTarget as HTMLElement;
+        const url = trigger.dataset.url;
+        if (!url) return;
+        const label = trigger.dataset.label ?? "Link";
+        try {
+            const result = await api.openExternal(url);
+            if (result === "copied") {
+                flash(`Couldn't open browser · ${label} URL copied — paste it in your browser`);
+            } else if (result === "failed") {
+                flash(`Couldn't open ${label}`);
+            }
+        } catch (err) {
+            flash(`Couldn't open ${label}: ${String(err)}`);
+        }
+    });
+});
 
 // Filter chips
 els.chips.querySelectorAll<HTMLElement>(".chip").forEach((chip) => {
@@ -146,6 +203,7 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
         if (confirm.isOpen()) return; // confirm dialog handles its own close
         if (settings.isOpen()) return; // overlay handles its own close
+        if (vaultPanel.isOpen()) return; // overlay handles its own close
         if (!els.ctxMenu.classList.contains("hidden")) return; // ctx menu closes itself
         api.hidePopup();
     } else if ((e.ctrlKey || e.metaKey) && e.key === ",") {
@@ -161,6 +219,7 @@ window.addEventListener("blur", () => {
     if (currentSettings?.windowFrame) return; // windowed mode lives in the taskbar
     if (currentSettings?.hideOnBlur === false) return;
     if (settings.isOpen()) return;
+    if (vaultPanel.isOpen()) return;
     if (!els.ctxMenu.classList.contains("hidden")) return;
     // Slight delay so click-to-paste flow finishes first.
     setTimeout(() => api.hidePopup().catch(() => undefined), 150);
@@ -172,6 +231,9 @@ onEvent("clipboard:new-item", async () => {
 });
 onEvent("clipboard:cleared", async () => {
     await refresh();
+});
+onEvent("vault:changed", async () => {
+    if (vaultPanel.isOpen()) await vaultPanel.refresh();
 });
 
 // ---------- Rendering ----------

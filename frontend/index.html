@@ -26,6 +26,12 @@
             </svg>
             <input id="search" type="text" autocomplete="off" spellcheck="false" placeholder="Search clipboard history…" />
           </div>
+          <button class="iconbtn vault-open-btn" id="open-vault" title="Private Vault" aria-label="Private Vault">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+              <path d="M8 11V7a4 4 0 0 1 8 0v4"></path>
+            </svg>
+          </button>
           <button class="iconbtn settings-btn" id="open-settings" title="Settings (Ctrl+,)" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
@@ -48,11 +54,29 @@
           <span id="status-count">0 items</span>
           <span class="status-hint">↑↓ navigate · Enter paste · / search · Esc close</span>
         </footer>
+
+        <!-- Tiny credit line: developer portfolio + GitHub star CTA -->
+        <div class="credit-bar" role="contentinfo">
+          <span class="credit-text">
+            Crafted by
+            <button type="button" class="credit-link" id="credit-author" data-url="https://portfolio.syedamirali.me/" data-label="Portfolio" title="Open developer portfolio">
+              Syed Amir Ali
+            </button>
+          </span>
+          <span class="credit-sep" aria-hidden="true">·</span>
+          <button type="button" class="credit-link credit-star" id="credit-star" data-url="https://github.com/SyedAmirAli/clipboard-history" data-label="GitHub repo" title="Star this project on GitHub">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 2l2.9 6.9 7.1.6-5.4 4.7 1.7 7L12 17.8 5.7 21.2l1.7-7L2 9.5l7.1-.6L12 2z"/>
+            </svg>
+            <span>Star on GitHub</span>
+          </button>
+        </div>
       </div>
 
       <!-- Settings overlay (scrim dims + content blurs behind it) -->
       <div class="settings-scrim" id="settings-scrim"></div>
       <div id="settings-modal" class="settings-overlay" role="dialog" aria-modal="true" aria-hidden="true"></div>
+      <div id="vault-modal" class="settings-overlay vault-overlay" role="dialog" aria-modal="true" aria-hidden="true"></div>
 
       <!-- Toast -->
       <div id="toast" class="toast hidden" role="status"></div>

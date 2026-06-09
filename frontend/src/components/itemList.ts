@@ -14,11 +14,13 @@ const SVG_PIN_OUTLINE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 const SVG_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const SVG_DELETE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
 const SVG_EMPTY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1" ry="1"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg>`;
+const SVG_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
 
 export interface ItemListActions {
     onPaste(item: ClipItem): void;
     onCopy(item: ClipItem): void;
     onPinToggle(item: ClipItem): void;
+    onMoveToVault(item: ClipItem): void;
     onDelete(item: ClipItem): void;
     onContextMenu(at: { x: number; y: number }, item: ClipItem): void;
 }
@@ -97,6 +99,7 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
           <div class="item-actions">
             ${pinHtml}
             <button class="ab copy-btn" title="Copy">${SVG_COPY}</button>
+            <button class="ab vault-btn" title="Move to Vault">${SVG_LOCK}</button>
             <button class="ab danger del-btn" title="Delete">${SVG_DELETE}</button>
           </div>
         </div>
@@ -145,6 +148,10 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
         }
         if (target.closest(".copy-btn")) {
             actions.onCopy(item);
+            return;
+        }
+        if (target.closest(".vault-btn")) {
+            actions.onMoveToVault(item);
             return;
         }
         // Click was somewhere in the action/marker zone but not on a button:

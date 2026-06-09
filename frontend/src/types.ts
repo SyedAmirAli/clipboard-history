@@ -35,3 +35,35 @@ export interface SystemInfo {
   sessionType: string;
   desktop: string;
 }
+
+export interface VaultStatus {
+  configured: boolean;
+  unlocked: boolean;
+  failedAttempts: number;
+  lockedUntil?: number;
+}
+
+export interface VaultSetupBundle {
+  secret: string;
+  otpauthUrl: string;
+  qrCodeSvg: string;
+  manualKey: string;
+  accountName: string;
+  issuer: string;
+}
+
+export interface VaultItem {
+  id: number;
+  contentType: ContentType;
+  preview: string;
+  imageThumb?: string;
+  imageW?: number;
+  imageH?: number;
+  createdAt: number;
+  lastUsedAt: number;
+}
+
+export interface VaultSecret {
+  contentType: ContentType;
+  text?: string;
+}

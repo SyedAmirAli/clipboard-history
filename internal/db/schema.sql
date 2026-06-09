@@ -26,3 +26,19 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS vault_entries (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  content_type  TEXT    NOT NULL,
+  payload       BLOB    NOT NULL,
+  nonce         BLOB    NOT NULL,
+  content_hash  TEXT    NOT NULL,
+  created_at    INTEGER NOT NULL,
+  last_used_at  INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vault_entries_order
+  ON vault_entries(last_used_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_vault_entries_hash
+  ON vault_entries(content_hash);

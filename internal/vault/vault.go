@@ -359,10 +359,15 @@ func groupedSecret(secret string) string {
 }
 
 func qrImageHTML(data string) (string, error) {
-	png, err := qrcode.Encode(data, qrcode.High, 384)
+	q, err := qrcode.New(data, qrcode.High)
+	if err != nil {
+		return "", err
+	}
+	// Fixed square PNG — scales cleanly inside the vault QR frame.
+	png, err := q.PNG(256)
 	if err != nil {
 		return "", err
 	}
 	src := "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
-	return `<img alt="Authenticator setup QR code" src="` + src + `"/>`, nil
+	return `<img alt="Authenticator setup QR code" width="256" height="256" src="` + src + `"/>`, nil
 }

@@ -211,7 +211,10 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
         <div class="vault-setup-content">
           <div class="vault-qr-col">
             <div class="vault-qr">${qr}</div>
-            <div class="vault-key">${escapeHtml(setup?.manualKey ?? "")}</div>
+            <div class="vault-key-wrap">
+              <div class="vault-key">${escapeHtml(setup?.manualKey ?? "")}</div>
+              <button type="button" class="vault-key-copy" data-act="copy-manual-key" title="Copy recovery key" aria-label="Copy recovery key">${SVG_COPY}</button>
+            </div>
           </div>
           <div class="vault-form-col">
             <div class="vault-instructions">
@@ -411,6 +414,11 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
         togglePasswordVisibility("confirm", () => {
           resetConfirmVisible = !resetConfirmVisible;
         }, renderReset);
+      } else if (act === "copy-manual-key") {
+        const text = setup?.secret ?? setup?.manualKey?.replace(/\s+/g, "") ?? "";
+        if (!text) return;
+        await copyTextToClipboard(text);
+        actions.flash("Recovery key copied");
       } else if (act === "reset-pin") {
         await actions.resetPIN(value("code"), value("pin"), value("confirm"));
         authCodeVisible = false;
@@ -505,4 +513,26 @@ function escapeHtml(s: string): string {
 function imageMeta(item: VaultItem): string {
   if (item.imageW && item.imageH) return `Private image ${item.imageW}×${item.imageH}`;
   return "Private image item";
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.top = "-1000px";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    if (!document.execCommand("copy")) {
+      throw new Error('execCommand("copy") returned false');
+    }
+  } finally {
+    document.body.removeChild(ta);
+  }
 }

@@ -28,7 +28,7 @@ Wayland** — it detects the session and uses the matching clipboard backend.
 ## Install (recommended)
 
 ```bash
-sudo apt install ./clipd_1.0.1_amd64.deb
+sudo apt install ./clipd_1.1.1_amd64.deb
 ```
 
 This installs:

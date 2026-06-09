@@ -48,7 +48,7 @@ Or use the helper:
 
 ### Install the .deb (on a real Debian/Ubuntu desktop)
 ```bash
-sudo apt install ./dist/clipd_1.1.1_amd64.deb
+sudo apt install ./dist/clipd_1.1.4_amd64.deb
 ```
 Installs the binary to `/usr/bin/clipd`, an app icon, and a `.desktop` launcher.
 
@@ -163,6 +163,8 @@ A quick map of what's built in:
 - Move any history item into the vault from the row actions or context menu
 - Setup and unlock forms include labeled fields and show/hide toggles for PIN entry
 - Open via the red lock button in the title bar; vault auto-locks after inactivity
+- Press **Enter** in any vault form field to submit (unlock, setup, or reset)
+- Use **Lock** to re-encrypt the vault or **Close** to dismiss the panel while it stays unlocked
 
 ---
 

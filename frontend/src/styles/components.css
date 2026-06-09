@@ -230,6 +230,12 @@
   font-size: 14px;
   font-weight: 600;
 }
+.vault-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .vault-setup,
 .vault-unlock,
 .vault-reset {
@@ -526,6 +532,39 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+}
+
+.vault-overlay.vault-mode-locked > .vault-signin-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--transition), color var(--transition);
+}
+.vault-overlay.vault-mode-locked > .vault-signin-close:hover {
+  background: rgba(var(--danger-rgb), 0.12);
+  color: var(--danger);
+}
+.vault-overlay.vault-mode-locked > .vault-signin-close:focus-visible {
+  outline: none;
+  color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(var(--danger-rgb), 0.35);
+}
+.vault-overlay.vault-mode-locked > .vault-signin-close svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
 }
 
 .vault-signin-card {

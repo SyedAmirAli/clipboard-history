@@ -6,6 +6,7 @@ const SVG_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const SVG_DELETE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
 const SVG_EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const SVG_EYE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 18 18"/><path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2"/><path d="M9.5 5.4A9.8 9.8 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-3.2 4.2"/><path d="M6.1 6.9C3.5 8.7 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4-.8"/></svg>`;
+const SVG_CLOSE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`;
 
 function renderPasswordField(opts: {
   field: string;
@@ -274,6 +275,7 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
       : "";
 
     root.innerHTML = `
+      <button type="button" class="vault-signin-close" data-act="close-panel" aria-label="Close" title="Close">${SVG_CLOSE}</button>
       <div class="vault-signin-card" role="document">
         <div class="vault-signin-header">
           <div class="vault-signin-icon" aria-hidden="true">${lockIcon}</div>
@@ -342,7 +344,14 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
       ? items.map(renderVaultItem).join("")
       : `<div class="vault-empty">No private items</div>`;
     root.innerHTML = `
-      <div class="vault-head"><span>${SVG_UNLOCK}</span><strong>Private Vault</strong><button class="s-btn" data-act="lock">Lock</button></div>
+      <div class="vault-head">
+        <span>${SVG_UNLOCK}</span>
+        <strong>Private Vault</strong>
+        <div class="vault-head-actions">
+          <button class="s-btn" data-act="lock">Lock</button>
+          <button class="s-btn" data-act="close-panel">Close</button>
+        </div>
+      </div>
       <div class="vault-list">${body}</div>
     `;
   }
@@ -365,25 +374,47 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
     `;
   }
 
+  async function submitConfirmSetup() {
+    await actions.confirmSetup(value("pin"), value("confirm"), value("code"));
+    setup = null;
+    await refresh();
+    actions.flash("Private vault created");
+    completeUnlockFlow();
+  }
+
+  async function submitUnlockPin() {
+    await actions.unlockPIN(value("pin"));
+    await refresh();
+    completeUnlockFlow();
+  }
+
+  async function submitUnlockCode() {
+    await actions.unlockCode(value("code"));
+    authCodeVisible = false;
+    await refresh();
+    completeUnlockFlow();
+  }
+
+  async function submitResetPin() {
+    await actions.resetPIN(value("code"), value("pin"), value("confirm"));
+    authCodeVisible = false;
+    await refresh();
+    actions.flash("PIN/password reset");
+    completeUnlockFlow();
+  }
+
   root.addEventListener("click", async (e) => {
     const target = e.target as HTMLElement;
     const act = target.closest<HTMLElement>("[data-act]")?.dataset.act;
     try {
-      if (act === "confirm-setup") {
-        await actions.confirmSetup(value("pin"), value("confirm"), value("code"));
-        setup = null;
-        await refresh();
-        actions.flash("Private vault created");
-        completeUnlockFlow();
+      if (act === "close-panel") {
+        close();
+      } else if (act === "confirm-setup") {
+        await submitConfirmSetup();
       } else if (act === "unlock-pin") {
-        await actions.unlockPIN(value("pin"));
-        await refresh();
-        completeUnlockFlow();
+        await submitUnlockPin();
       } else if (act === "unlock-code") {
-        await actions.unlockCode(value("code"));
-        authCodeVisible = false;
-        await refresh();
-        completeUnlockFlow();
+        await submitUnlockCode();
       } else if (act === "reset") {
         mode = "reset";
         render();
@@ -420,11 +451,7 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
         await copyTextToClipboard(text);
         actions.flash("Recovery key copied");
       } else if (act === "reset-pin") {
-        await actions.resetPIN(value("code"), value("pin"), value("confirm"));
-        authCodeVisible = false;
-        await refresh();
-        actions.flash("PIN/password reset");
-        completeUnlockFlow();
+        await submitResetPin();
       } else if (act === "lock") {
         await actions.lock();
         revealed.clear();
@@ -459,6 +486,32 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
     } catch (err) {
       actions.flash(String(err));
     }
+  });
+
+  root.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !isOpen()) return;
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    const field = target.dataset.field;
+    if (!field) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    void (async () => {
+      try {
+        if (mode === "locked") {
+          if (field === "pin") await submitUnlockPin();
+          else if (field === "code" && authCodeVisible) await submitUnlockCode();
+        } else if (mode === "setup") {
+          await submitConfirmSetup();
+        } else if (mode === "reset") {
+          await submitResetPin();
+        }
+      } catch (err) {
+        actions.flash(String(err));
+      }
+    })();
   });
 
   function value(field: string): string {

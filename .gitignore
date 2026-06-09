@@ -6,4 +6,3 @@ dist/
 *.deb
 *.tar.gz
 .DS_Store
-.claude/

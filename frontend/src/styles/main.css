@@ -351,22 +351,21 @@ textarea {
   width: 30px;
   height: 30px;
   border-radius: var(--radius-sm);
-  color: #fff;
-  background: var(--danger);
-  border: 1px solid rgba(var(--danger-rgb), 0.55);
+  color: var(--danger);
+  background: rgba(var(--danger-rgb), 0.12);
+  border: 1px solid rgba(var(--danger-rgb), 0.2);
   --wails-draggable: no-drag;
   transition: background var(--transition), border-color var(--transition),
-    filter var(--transition);
+    color var(--transition);
 }
 .vault-open-btn svg {
   width: 14px;
   height: 14px;
 }
 .vault-open-btn:hover {
-  background: var(--danger);
-  border-color: rgba(var(--danger-rgb), 0.75);
-  color: #fff;
-  filter: brightness(1.08);
+  background: rgba(var(--danger-rgb), 0.22);
+  border-color: rgba(var(--danger-rgb), 0.35);
+  color: var(--danger);
 }
 
 /* ---------- Filter chips ---------- */

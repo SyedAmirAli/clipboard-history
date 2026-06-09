@@ -8,17 +8,18 @@
 name: clipd
 arch: amd64
 platform: linux
-version: "0.1.0"
+version: "1.0.0"
 section: utils
 priority: optional
 maintainer: "Syed Amir Ali <sywmohammadamir@gmail.com>"
 description: |
-  Lightweight clipboard history manager for X11 Linux desktops.
-  Captures text and image clipboard contents, supports pinning,
-  search, a global hotkey (default Super+V), system tray, and a
-  configurable max history size. Inspired by Windows' Win+V panel.
+  Lightweight clipboard history manager for Linux (X11 and Wayland).
+  Captures text and image clipboard contents, supports pinning, search,
+  a global hotkey (default Super+V), system tray, and a configurable
+  max history size. Includes an encrypted Private Vault for sensitive
+  items. Inspired by Windows' Win+V panel.
 vendor: "clipd"
-homepage: "https://github.com/syedamirali/clipd"
+homepage: "https://github.com/SyedAmirAli/clipboard-history"
 license: "MIT"
 
 depends:

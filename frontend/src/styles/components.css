@@ -274,6 +274,25 @@
 .vault-form-col {
   padding-top: 2px;
 }
+.vault-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.vault-field-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+.vault-form-col .vault-signin-input-wrap,
+.vault-reset .vault-signin-input-wrap {
+  margin-bottom: 0;
+}
+.vault-form-col .vault-field + .vault-field,
+.vault-reset .vault-field + .vault-field {
+  margin-top: 2px;
+}
 .vault-instructions {
   padding: 10px 11px;
   border-radius: var(--radius-sm);

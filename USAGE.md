@@ -48,7 +48,7 @@ Or use the helper:
 
 ### Install the .deb (on a real Debian/Ubuntu desktop)
 ```bash
-sudo apt install ./dist/clipd_1.0.0_amd64.deb
+sudo apt install ./dist/clipd_1.0.1_amd64.deb
 ```
 Installs the binary to `/usr/bin/clipd`, an app icon, and a `.desktop` launcher.
 
@@ -71,6 +71,7 @@ env‑less call like `wsl.exe clipd toggle` bound to a Windows hotkey.
 | `clipd hide` | Force the popup to hide. |
 | `clipd quit` | **Fully shut down** the running instance (aliases: `exit`, `stop`). |
 | `clipd restart` | Shut the running instance down and start a fresh one. |
+| `clipd reset-vault` | Delete private vault setup and all vault entries (instance must not be running). |
 | `clipd help` (`-h`, `--help`) | Print usage. |
 
 If you run a control command with no instance running, clipd tells you so and
@@ -153,6 +154,15 @@ A quick map of what's built in:
 - **Light/dark theme** (auto / light / dark)
 - **X11 + Wayland** — the binary detects the session and uses the matching
   clipboard backend; no separate builds per display server
+
+**Private Vault**
+- Encrypted storage for sensitive text and image clipboard items
+- First-time setup: scan a QR code (or enter a manual key) in an authenticator
+  app, then set a PIN/password and confirm with a 6-digit code
+- Unlock with PIN/password or authenticator code; reset PIN using authenticator only
+- Move any history item into the vault from the row actions or context menu
+- Setup and unlock forms include labeled fields and show/hide toggles for PIN entry
+- Open via the red lock button in the title bar; vault auto-locks after inactivity
 
 ---
 

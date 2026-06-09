@@ -18,6 +18,8 @@ Wayland** — it detects the session and uses the matching clipboard backend.
 -   Frameless window with a custom macOS-style title bar; runs as a normal
     taskbar window or a floating popup
 -   Themed delete / clear-history confirmation dialogs
+-   **Private Vault** — encrypted storage for sensitive clipboard items (PIN/password +
+    authenticator unlock, move-to-vault from any row)
 -   Built with Go + Wails v2, vanilla TypeScript frontend, pure-Go SQLite
 -   ~13 MB single binary
 
@@ -26,7 +28,7 @@ Wayland** — it detects the session and uses the matching clipboard backend.
 ## Install (recommended)
 
 ```bash
-sudo apt install ./clipd_1.0.0_amd64.deb
+sudo apt install ./clipd_1.0.1_amd64.deb
 ```
 
 This installs:

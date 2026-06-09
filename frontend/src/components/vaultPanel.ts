@@ -7,6 +7,70 @@ const SVG_DELETE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const SVG_EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const SVG_EYE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 18 18"/><path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2"/><path d="M9.5 5.4A9.8 9.8 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-3.2 4.2"/><path d="M6.1 6.9C3.5 8.7 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4-.8"/></svg>`;
 
+function renderPasswordField(opts: {
+  field: string;
+  label: string;
+  placeholder: string;
+  visible: boolean;
+  toggleAct: string;
+  autocomplete: string;
+  disabled?: boolean;
+}): string {
+  const disabled = opts.disabled ? "disabled" : "";
+  return `
+    <label class="vault-field">
+      <span class="vault-field-label">${opts.label}</span>
+      <div class="vault-signin-input-wrap has-trailing">
+        <input
+          class="vault-signin-input vault-input"
+          type="${opts.visible ? "text" : "password"}"
+          data-field="${opts.field}"
+          placeholder="${opts.placeholder}"
+          autocomplete="${opts.autocomplete}"
+          ${disabled}
+        />
+        <button
+          type="button"
+          class="vault-signin-eye"
+          data-act="${opts.toggleAct}"
+          aria-label="${opts.visible ? `Hide ${opts.label}` : `Show ${opts.label}`}"
+          aria-pressed="${opts.visible}"
+          title="${opts.visible ? "Hide" : "Show"}"
+          ${disabled}
+        >${opts.visible ? SVG_EYE_OFF : SVG_EYE}</button>
+      </div>
+    </label>
+  `;
+}
+
+function renderLabeledField(opts: {
+  field: string;
+  label: string;
+  placeholder: string;
+  autocomplete?: string;
+  inputmode?: string;
+  type?: string;
+  disabled?: boolean;
+}): string {
+  const disabled = opts.disabled ? "disabled" : "";
+  return `
+    <label class="vault-field">
+      <span class="vault-field-label">${opts.label}</span>
+      <div class="vault-signin-input-wrap">
+        <input
+          class="vault-signin-input vault-input"
+          type="${opts.type ?? "text"}"
+          data-field="${opts.field}"
+          placeholder="${opts.placeholder}"
+          autocomplete="${opts.autocomplete ?? "off"}"
+          ${opts.inputmode ? `inputmode="${opts.inputmode}"` : ""}
+          ${disabled}
+        />
+      </div>
+    </label>
+  `;
+}
+
 export interface VaultPanelActions {
   status(): Promise<VaultStatus>;
   startSetup(): Promise<VaultSetupBundle>;
@@ -43,6 +107,10 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
   let mode: Mode = "locked";
   let authCodeVisible = false;
   let pinVisible = false;
+  let setupPinVisible = false;
+  let setupConfirmVisible = false;
+  let resetPinVisible = false;
+  let resetConfirmVisible = false;
   let unlockResolvers: Array<(ok: boolean) => void> = [];
   const revealed = new Map<number, string>();
   const { scrim, mainContent } = actions.chrome;
@@ -71,6 +139,10 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
     document.removeEventListener("keydown", escHandler, true);
     revealed.clear();
     pinVisible = false;
+    setupPinVisible = false;
+    setupConfirmVisible = false;
+    resetPinVisible = false;
+    resetConfirmVisible = false;
     authCodeVisible = false;
     resolveUnlockWaiters(false);
   }
@@ -146,9 +218,29 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
               <strong>Set up authenticator access</strong>
               <p>Scan the QR code in Google Authenticator, or enter the manual key. Then create a PIN/password and enter the current 6-digit code.</p>
             </div>
-            <input class="vault-input" type="password" data-field="pin" placeholder="PIN/password" autocomplete="new-password"/>
-            <input class="vault-input" type="password" data-field="confirm" placeholder="Confirm PIN/password" autocomplete="new-password"/>
-            <input class="vault-input" data-field="code" placeholder="Authenticator code" inputmode="numeric" autocomplete="one-time-code"/>
+            ${renderPasswordField({
+              field: "pin",
+              label: "PIN or password",
+              placeholder: "Enter PIN or password",
+              visible: setupPinVisible,
+              toggleAct: "toggle-setup-pin",
+              autocomplete: "new-password",
+            })}
+            ${renderPasswordField({
+              field: "confirm",
+              label: "Confirm PIN or password",
+              placeholder: "Re-enter PIN or password",
+              visible: setupConfirmVisible,
+              toggleAct: "toggle-setup-confirm",
+              autocomplete: "new-password",
+            })}
+            ${renderLabeledField({
+              field: "code",
+              label: "Authenticator code",
+              placeholder: "6-digit code",
+              inputmode: "numeric",
+              autocomplete: "one-time-code",
+            })}
             <button class="s-btn primary vault-full" data-act="confirm-setup">Create Vault</button>
           </div>
         </div>
@@ -214,9 +306,29 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
     root.innerHTML = `
       <div class="vault-head"><span>${SVG_LOCK}</span><strong>Reset PIN</strong><button class="s-btn" data-act="cancel-reset">Cancel</button></div>
       <div class="vault-reset">
-        <input class="vault-input" data-field="code" placeholder="Authenticator code" inputmode="numeric" autocomplete="one-time-code"/>
-        <input class="vault-input" type="password" data-field="pin" placeholder="New PIN/password" autocomplete="new-password"/>
-        <input class="vault-input" type="password" data-field="confirm" placeholder="Confirm new PIN/password" autocomplete="new-password"/>
+        ${renderLabeledField({
+          field: "code",
+          label: "Authenticator code",
+          placeholder: "6-digit code",
+          inputmode: "numeric",
+          autocomplete: "one-time-code",
+        })}
+        ${renderPasswordField({
+          field: "pin",
+          label: "New PIN or password",
+          placeholder: "Enter new PIN or password",
+          visible: resetPinVisible,
+          toggleAct: "toggle-reset-pin",
+          autocomplete: "new-password",
+        })}
+        ${renderPasswordField({
+          field: "confirm",
+          label: "Confirm new PIN or password",
+          placeholder: "Re-enter new PIN or password",
+          visible: resetConfirmVisible,
+          toggleAct: "toggle-reset-confirm",
+          autocomplete: "new-password",
+        })}
         <button class="s-btn primary vault-full" data-act="reset-pin">Save New PIN</button>
       </div>
     `;
@@ -280,20 +392,25 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
         renderLocked();
         requestAnimationFrame(() => root.querySelector<HTMLInputElement>('[data-field="code"]')?.focus());
       } else if (act === "toggle-pin") {
-        const pinInput = root.querySelector<HTMLInputElement>('[data-field="pin"]');
-        const currentValue = pinInput?.value ?? "";
-        const caret = pinInput?.selectionStart ?? currentValue.length;
-        pinVisible = !pinVisible;
-        renderLocked();
-        requestAnimationFrame(() => {
-          const next = root.querySelector<HTMLInputElement>('[data-field="pin"]');
-          if (!next) return;
-          next.value = currentValue;
-          next.focus();
-          try {
-            next.setSelectionRange(caret, caret);
-          } catch {}
-        });
+        togglePasswordVisibility("pin", () => {
+          pinVisible = !pinVisible;
+        }, renderLocked);
+      } else if (act === "toggle-setup-pin") {
+        togglePasswordVisibility("pin", () => {
+          setupPinVisible = !setupPinVisible;
+        }, renderSetup);
+      } else if (act === "toggle-setup-confirm") {
+        togglePasswordVisibility("confirm", () => {
+          setupConfirmVisible = !setupConfirmVisible;
+        }, renderSetup);
+      } else if (act === "toggle-reset-pin") {
+        togglePasswordVisibility("pin", () => {
+          resetPinVisible = !resetPinVisible;
+        }, renderReset);
+      } else if (act === "toggle-reset-confirm") {
+        togglePasswordVisibility("confirm", () => {
+          resetConfirmVisible = !resetConfirmVisible;
+        }, renderReset);
       } else if (act === "reset-pin") {
         await actions.resetPIN(value("code"), value("pin"), value("confirm"));
         authCodeVisible = false;
@@ -338,6 +455,39 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
 
   function value(field: string): string {
     return root.querySelector<HTMLInputElement>(`[data-field="${field}"]`)?.value ?? "";
+  }
+
+  function collectInputs(): Record<string, string> {
+    const out: Record<string, string> = {};
+    root.querySelectorAll<HTMLInputElement>("[data-field]").forEach((el) => {
+      const field = el.dataset.field;
+      if (field) out[field] = el.value;
+    });
+    return out;
+  }
+
+  function togglePasswordVisibility(
+    focusField: string,
+    toggle: () => void,
+    rerender: () => void
+  ) {
+    const saved = collectInputs();
+    const input = root.querySelector<HTMLInputElement>(`[data-field="${focusField}"]`);
+    const caret = input?.selectionStart ?? (saved[focusField]?.length ?? 0);
+    toggle();
+    rerender();
+    requestAnimationFrame(() => {
+      for (const [field, val] of Object.entries(saved)) {
+        const el = root.querySelector<HTMLInputElement>(`[data-field="${field}"]`);
+        if (el) el.value = val;
+      }
+      const next = root.querySelector<HTMLInputElement>(`[data-field="${focusField}"]`);
+      if (!next) return;
+      next.focus();
+      try {
+        next.setSelectionRange(caret, caret);
+      } catch {}
+    });
   }
 
   return { open, close, isOpen, refresh, ensureUnlocked };

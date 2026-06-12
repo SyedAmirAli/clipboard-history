@@ -54,6 +54,7 @@ export interface VaultSetupBundle {
 
 export interface VaultItem {
   id: number;
+  title?: string;
   contentType: ContentType;
   preview: string;
   imageThumb?: string;

@@ -16,6 +16,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+export PATH="/usr/local/go/bin:${HOME}/go/bin:${PATH}"
+export GOCACHE="${GOCACHE:-/tmp/clipd-go-cache}"
+export GOMODCACHE="${GOMODCACHE:-/tmp/clipd-go-mod}"
+
 echo "==> Building clipd binary (webkit2_41 build tag for modern Ubuntu/Mint)"
 wails build -tags webkit2_41 -clean -ldflags="-s -w"
 

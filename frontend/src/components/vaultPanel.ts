@@ -6,6 +6,8 @@ const SVG_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const SVG_DELETE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
 const SVG_EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const SVG_EYE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 18 18"/><path d="M10.6 10.6A3 3 0 0 0 12 15a3 3 0 0 0 2.4-1.2"/><path d="M9.5 5.4A9.8 9.8 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-3.2 4.2"/><path d="M6.1 6.9C3.5 8.7 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4-.8"/></svg>`;
+const SVG_EDIT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
+const SVG_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
 const SVG_CLOSE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`;
 
 function renderPasswordField(opts: {
@@ -83,6 +85,7 @@ export interface VaultPanelActions {
   list(): Promise<VaultItem[]>;
   copy(id: number): Promise<void>;
   reveal(id: number): Promise<VaultSecret>;
+  updateTitle(id: number, title: string): Promise<void>;
   delete(id: number): Promise<void>;
   flash(msg: string): void;
   chrome: {
@@ -112,6 +115,7 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
   let setupConfirmVisible = false;
   let resetPinVisible = false;
   let resetConfirmVisible = false;
+  let editingTitleID: number | null = null;
   let unlockResolvers: Array<(ok: boolean) => void> = [];
   const revealed = new Map<number, string>();
   const { scrim, mainContent } = actions.chrome;
@@ -145,6 +149,7 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
     resetPinVisible = false;
     resetConfirmVisible = false;
     authCodeVisible = false;
+    editingTitleID = null;
     resolveUnlockWaiters(false);
   }
 
@@ -152,6 +157,11 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
     if (e.key !== "Escape" || !isOpen()) return;
     e.preventDefault();
     e.stopPropagation();
+    if (editingTitleID !== null) {
+      editingTitleID = null;
+      renderUnlocked();
+      return;
+    }
     close();
   }
 
@@ -161,9 +171,13 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
       mode = status.configured ? (status.unlocked ? "unlocked" : "locked") : "setup";
       if (status.unlocked) {
         items = await actions.list();
+        if (editingTitleID !== null && !items.some((item) => item.id === editingTitleID)) {
+          editingTitleID = null;
+        }
       } else {
         items = [];
         revealed.clear();
+        editingTitleID = null;
       }
       if (mode === "setup" && !setup) setup = await actions.startSetup();
       render();
@@ -358,18 +372,32 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
 
   function renderVaultItem(item: VaultItem) {
     const meta = item.contentType === "image" ? imageMeta(item) : "Private text item";
+    const title = item.title?.trim() || meta;
     const revealedText = revealed.get(item.id);
     const canReveal = item.contentType === "text";
+    const editingTitle = editingTitleID === item.id;
+    const titleView = editingTitle
+      ? `<input class="vault-title-input" data-field="vault-title" value="${escapeHtml(title)}" maxlength="120" aria-label="Vault item title"/>`
+      : `<div class="vault-preview">${escapeHtml(title)}</div>`;
+    const actionButtons = editingTitle
+      ? `
+        <button class="ab save-title" title="Save title" aria-label="Save title">${SVG_CHECK}</button>
+        <button class="ab cancel-title" title="Cancel title" aria-label="Cancel title">${SVG_CLOSE}</button>
+      `
+      : `
+        <button class="ab reveal-vault" title="${revealedText ? "Hide" : "Show"}" ${canReveal ? "" : "disabled"}>${revealedText ? SVG_EYE_OFF : SVG_EYE}</button>
+        <button class="ab edit-title" title="Edit title" aria-label="Edit title">${SVG_EDIT}</button>
+        <button class="ab copy-vault" title="Copy">${SVG_COPY}</button>
+        <button class="ab danger delete-vault" title="Delete">${SVG_DELETE}</button>
+      `;
     return `
-      <div class="vault-item" data-id="${item.id}">
+      <div class="vault-item ${editingTitle ? "editing-title" : ""}" data-id="${item.id}">
         <div class="vault-icon">${SVG_LOCK}</div>
         <div class="vault-item-main">
           <div class="vault-secret ${revealedText ? "revealed" : ""}">${escapeHtml(revealedText ?? "••••••••••••")}</div>
-          <div class="vault-preview">${escapeHtml(meta)}</div>
+          ${titleView}
         </div>
-        <button class="ab reveal-vault" title="${revealedText ? "Hide" : "Show"}" ${canReveal ? "" : "disabled"}>${revealedText ? SVG_EYE_OFF : SVG_EYE}</button>
-        <button class="ab copy-vault" title="Copy">${SVG_COPY}</button>
-        <button class="ab danger delete-vault" title="Delete">${SVG_DELETE}</button>
+        ${actionButtons}
       </div>
     `;
   }
@@ -473,6 +501,19 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
             }
           }
           renderUnlocked();
+        } else if (target.closest(".edit-title")) {
+          editingTitleID = id;
+          renderUnlocked();
+          requestAnimationFrame(() => {
+            const input = root.querySelector<HTMLInputElement>(`.vault-item[data-id="${id}"] .vault-title-input`);
+            input?.focus();
+            input?.select();
+          });
+        } else if (target.closest(".save-title")) {
+          await saveTitle(id);
+        } else if (target.closest(".cancel-title")) {
+          editingTitleID = null;
+          renderUnlocked();
         } else if (target.closest(".copy-vault")) {
           actions.flash("Copying private item...");
           await actions.copy(id);
@@ -507,6 +548,10 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
           await submitConfirmSetup();
         } else if (mode === "reset") {
           await submitResetPin();
+        } else if (mode === "unlocked" && field === "vault-title") {
+          const itemEl = target.closest<HTMLElement>(".vault-item");
+          const id = Number(itemEl?.dataset.id);
+          if (Number.isFinite(id)) await saveTitle(id);
         }
       } catch (err) {
         actions.flash(String(err));
@@ -516,6 +561,15 @@ export function createVaultPanel(root: HTMLElement, actions: VaultPanelActions):
 
   function value(field: string): string {
     return root.querySelector<HTMLInputElement>(`[data-field="${field}"]`)?.value ?? "";
+  }
+
+  async function saveTitle(id: number) {
+    const input = root.querySelector<HTMLInputElement>(`.vault-item[data-id="${id}"] .vault-title-input`);
+    if (!input) return;
+    await actions.updateTitle(id, input.value);
+    editingTitleID = null;
+    actions.flash("Vault title saved");
+    await refresh();
   }
 
   function collectInputs(): Record<string, string> {

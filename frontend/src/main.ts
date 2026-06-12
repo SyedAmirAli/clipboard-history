@@ -123,6 +123,7 @@ const vaultPanel = createVaultPanel(els.vaultModal, {
     list: () => api.listVaultItems(),
     copy: (id) => api.copyVaultItem(id),
     reveal: (id) => api.revealVaultItem(id),
+    updateTitle: (id, title) => api.updateVaultItemTitle(id, title),
     delete: (id) => api.deleteVaultItem(id),
     flash,
     chrome: { scrim: els.scrim, mainContent: els.mainContent },

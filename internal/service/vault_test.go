@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"path/filepath"
 	"testing"
 	"time"
@@ -247,6 +248,54 @@ func TestRevealVaultItemReturnsTextAndCopyRemainsSuppressed(t *testing.T) {
 	}
 	if len(items) != 0 {
 		t.Fatalf("copied vault item was reingested into normal history: %+v", items)
+	}
+}
+
+func TestUpdateVaultItemTitlePersistsEncryptedTitle(t *testing.T) {
+	svc, store, _ := newTestService(t)
+	defer store.Close()
+	setupVault(t, svc, "pin")
+
+	added, err := store.AddText("secret text", vault.HashText("secret text"))
+	if err != nil {
+		t.Fatalf("add text: %v", err)
+	}
+	if err := svc.MoveItemToVault(added.ID); err != nil {
+		t.Fatalf("move to vault: %v", err)
+	}
+	vaultItems, err := svc.ListVaultItems()
+	if err != nil {
+		t.Fatalf("list vault: %v", err)
+	}
+	if len(vaultItems) != 1 {
+		t.Fatalf("expected one vault item, got %d", len(vaultItems))
+	}
+
+	if err := svc.UpdateVaultItemTitle(vaultItems[0].ID, "  GitHub token\nprimary  "); err != nil {
+		t.Fatalf("update title: %v", err)
+	}
+	vaultItems, err = svc.ListVaultItems()
+	if err != nil {
+		t.Fatalf("list vault after title update: %v", err)
+	}
+	if got, want := vaultItems[0].Title, "GitHub token primary"; got != want {
+		t.Fatalf("unexpected title %q, want %q", got, want)
+	}
+	revealed, err := svc.RevealVaultItem(vaultItems[0].ID)
+	if err != nil {
+		t.Fatalf("reveal after title update: %v", err)
+	}
+	if revealed.Text != "secret text" {
+		t.Fatalf("unexpected revealed text after title update: %q", revealed.Text)
+	}
+
+	raw := store.Raw().QueryRow(`SELECT payload FROM vault_entries WHERE id = ?`, vaultItems[0].ID)
+	var payload []byte
+	if err := raw.Scan(&payload); err != nil {
+		t.Fatalf("read payload: %v", err)
+	}
+	if bytes.Contains(payload, []byte("GitHub")) || bytes.Contains(payload, []byte("secret text")) {
+		t.Fatal("vault payload exposed plaintext title or secret")
 	}
 }
 

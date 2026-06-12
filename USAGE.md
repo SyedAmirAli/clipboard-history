@@ -48,7 +48,7 @@ Or use the helper:
 
 ### Install the .deb (on a real Debian/Ubuntu desktop)
 ```bash
-sudo apt install ./dist/clipd_1.1.5_amd64.deb
+sudo apt install ./dist/clipd_1.1.6_amd64.deb
 ```
 Installs the binary to `/usr/bin/clipd`, an app icon, and a `.desktop` launcher.
 

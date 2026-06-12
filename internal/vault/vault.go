@@ -64,6 +64,7 @@ type SetupBundle struct {
 }
 
 type PlainEntry struct {
+	Title       string `json:"title,omitempty"`
 	ContentType string `json:"contentType"`
 	Text        string `json:"text,omitempty"`
 	ImagePNG    []byte `json:"imagePng,omitempty"`

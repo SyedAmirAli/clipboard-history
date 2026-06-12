@@ -445,7 +445,7 @@
 }
 .vault-item {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 28px 28px 28px;
+  grid-template-columns: 24px minmax(0, 1fr) 28px 28px 28px 28px;
   gap: 8px;
   align-items: center;
   min-height: 42px;
@@ -499,6 +499,23 @@
   white-space: nowrap;
   font-size: 12px;
   color: var(--text-muted);
+}
+.vault-title-input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  user-select: text;
+}
+.vault-title-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
 }
 .vault-empty,
 .vault-error {

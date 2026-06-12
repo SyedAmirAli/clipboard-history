@@ -283,6 +283,40 @@ func (s *Store) GetVaultEntry(id int64) (VaultEntry, error) {
 	return entry, nil
 }
 
+// ReadVaultEntry returns one encrypted vault row without changing recency.
+func (s *Store) ReadVaultEntry(id int64) (VaultEntry, error) {
+	var entry VaultEntry
+	err := s.db.QueryRow(`
+		SELECT id, content_type, payload, nonce, content_hash, created_at, last_used_at
+		FROM vault_entries
+		WHERE id = ?
+	`, id).Scan(&entry.ID, &entry.ContentType, &entry.Payload, &entry.Nonce,
+		&entry.ContentHash, &entry.CreatedAt, &entry.LastUsedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return VaultEntry{}, ErrNotFound
+	}
+	if err != nil {
+		return VaultEntry{}, err
+	}
+	return entry, nil
+}
+
+// UpdateVaultEntryPayload replaces the encrypted payload for a vault row.
+func (s *Store) UpdateVaultEntryPayload(id int64, payload, nonce []byte) error {
+	res, err := s.db.Exec(`UPDATE vault_entries SET payload = ?, nonce = ? WHERE id = ?`, payload, nonce, id)
+	if err != nil {
+		return fmt.Errorf("update vault entry payload: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update vault entry payload result: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // DeleteVaultEntry removes a vault row by id.
 func (s *Store) DeleteVaultEntry(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM vault_entries WHERE id = ?`, id)

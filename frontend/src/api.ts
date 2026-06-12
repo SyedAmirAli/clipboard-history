@@ -39,6 +39,7 @@ declare global {
           MoveItemToVault(id: number): Promise<void>;
           CopyVaultItem(id: number): Promise<void>;
           RevealVaultItem(id: number): Promise<VaultSecret>;
+          UpdateVaultItemTitle(id: number, title: string): Promise<void>;
           DeleteVaultItem(id: number): Promise<void>;
           GetSettings(): Promise<AppSettings>;
           UpdateSettings(s: AppSettings): Promise<AppSettings>;
@@ -138,6 +139,9 @@ export const api = {
   },
   revealVaultItem(id: number): Promise<VaultSecret> {
     return svc().RevealVaultItem(id);
+  },
+  updateVaultItemTitle(id: number, title: string): Promise<void> {
+    return svc().UpdateVaultItemTitle(id, title);
   },
   deleteVaultItem(id: number): Promise<void> {
     return svc().DeleteVaultItem(id);

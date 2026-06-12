@@ -251,6 +251,7 @@ type VaultStatus struct {
 
 type VaultEntryView struct {
 	ID          int64                 `json:"id"`
+	Title       string                `json:"title,omitempty"`
 	ContentType clipboard.ContentType `json:"contentType"`
 	Preview     string                `json:"preview"`
 	ImageThumb  string                `json:"imageThumb,omitempty"`
@@ -407,6 +408,7 @@ func (s *Service) ListVaultItems() ([]VaultEntryView, error) {
 		}
 		out = append(out, VaultEntryView{
 			ID:          row.ID,
+			Title:       plain.Title,
 			ContentType: clipboard.ContentType(plain.ContentType),
 			Preview:     vaultPreview(plain),
 			ImageThumb:  plain.ImageThumb,
@@ -502,6 +504,31 @@ func (s *Service) RevealVaultItem(id int64) (VaultSecretView, error) {
 		ContentType: clipboard.ContentType(plain.ContentType),
 		Text:        plain.Text,
 	}, nil
+}
+
+func (s *Service) UpdateVaultItemTitle(id int64, title string) error {
+	key, err := s.requireVaultKey()
+	if err != nil {
+		return err
+	}
+	row, err := s.store.ReadVaultEntry(id)
+	if err != nil {
+		return err
+	}
+	plain, err := vault.OpenEntry(key, row.Payload, row.Nonce)
+	if err != nil {
+		return err
+	}
+	plain.Title = normalizeVaultTitle(title)
+	payload, nonce, err := vault.SealEntry(key, plain)
+	if err != nil {
+		return err
+	}
+	if err := s.store.UpdateVaultEntryPayload(id, payload, nonce); err != nil {
+		return err
+	}
+	s.emitVaultChanged()
+	return nil
 }
 
 func (s *Service) DeleteVaultItem(id int64) error {
@@ -735,6 +762,17 @@ func vaultPreview(entry vault.PlainEntry) string {
 		}
 		return s
 	}
+}
+
+func normalizeVaultTitle(title string) string {
+	title = strings.ReplaceAll(title, "\r", " ")
+	title = strings.ReplaceAll(title, "\n", " ")
+	title = strings.ReplaceAll(title, "\t", " ")
+	title = strings.Join(strings.Fields(title), " ")
+	if runes := []rune(title); len(runes) > 120 {
+		title = string(runes[:120])
+	}
+	return title
 }
 
 func (s *Service) suppressVaultHash(hash string) {

@@ -184,13 +184,11 @@ func readImageWindows(ctx context.Context) ([]byte, error) {
 
 	img, err := dibToImage(dibData)
 	if err != nil {
-		fmt.Printf("DEBUG: dibToImage failed on %d bytes: %v\n", len(dibData), err)
 		return nil, fmt.Errorf("failed to convert DIB to image: %w", err)
 	}
 
 	var pngBuf bytes.Buffer
 	if err := png.Encode(&pngBuf, img); err != nil {
-		fmt.Printf("DEBUG: PNG encoding failed: %v\n", err)
 		return nil, fmt.Errorf("failed to encode image as PNG: %w", err)
 	}
 
@@ -232,7 +230,11 @@ func dibToImage(dibData []byte) (image.Image, error) {
 		return nil, fmt.Errorf("DIB dimensions too large: %dx%d (max: %d)", hdr.Width, hdr.Height, maxDimension)
 	}
 
-	fmt.Printf("DEBUG: DIB header - Size:%d Width:%d Height:%d BitCount:%d Compress:%d\n", hdr.Size, hdr.Width, hdr.Height, hdr.BitCount, hdr.Compress)
+	// Skip compressed DIB formats - we only handle uncompressed (Compress=0)
+	// Compress=1: RLE 8-bit, Compress=2: RLE 4-bit, Compress=3: Bitfields, etc.
+	if hdr.Compress != 0 {
+		return nil, fmt.Errorf("unsupported compressed DIB format: Compress=%d (only uncompressed supported)", hdr.Compress)
+	}
 
 	height := int(hdr.Height)
 	if hdr.Height < 0 {
@@ -266,32 +268,25 @@ func decodeDIBPixels(reader *bytes.Reader, dst *image.RGBA, width, height, bitCo
 			if bitCount == 24 {
 				if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
 					// EOF or read error: fill rest with black, return success
-					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading 24-bit pixel\n", x, y)
 					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &g); err != nil {
-					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading green channel\n", x, y)
 					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
-					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading red channel\n", x, y)
 					return nil
 				}
 			} else if bitCount == 32 {
 				if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
-					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading blue channel\n", x, y)
 					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &g); err != nil {
-					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading green channel\n", x, y)
 					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
-					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading red channel\n", x, y)
 					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &a); err != nil {
-					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading alpha channel\n", x, y)
 					return nil
 				}
 			}

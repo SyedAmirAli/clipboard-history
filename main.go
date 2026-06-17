@@ -17,7 +17,9 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"runtime"
 
 	"clipd/internal/autostart"
 	"clipd/internal/clipboard"
@@ -156,7 +158,7 @@ func main() {
 		sockPath: sockPath,
 	}
 
-	err = wails.Run(&options.App{
+	opts := &options.App{
 		Title:             "clipd",
 		Width:             520,
 		Height:            620,
@@ -173,16 +175,25 @@ func main() {
 		OnShutdown:        app.onShutdown,
 		OnBeforeClose:     app.onBeforeClose,
 		Bind:              []any{svc},
-		Linux: &linux.Options{
+	}
+
+	// Platform-specific options
+	if runtime.GOOS == "windows" {
+		opts.Windows = &windows.Options{
+			WebviewIsTransparent: true,
+			WindowIsTranslucent:  true,
+			BackdropType:         windows.Mica,
+		}
+	} else {
+		opts.Linux = &linux.Options{
 			Icon: appIcon,
-			// Translucent so the area outside the frontend's rounded corners
-			// is transparent instead of an opaque dark square (otherwise the
-			// four corners show as off-theme triangles).
 			WindowIsTranslucent: true,
 			WebviewGpuPolicy:    linux.WebviewGpuPolicyAlways,
 			ProgramName:         "clipd",
-		},
-	})
+		}
+	}
+
+	err = wails.Run(opts)
 	if err != nil {
 		log.Fatalf("wails run: %v", err)
 	}

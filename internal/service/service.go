@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -215,11 +216,17 @@ func (s *Service) PasteItem(id int64) error {
 
 	// Auto-paste: after the popup hides and focus returns to the user's
 	// previous window, synthesise Ctrl+V so the value drops straight into the
-	// field they were editing. Done asynchronously with a short delay to let
-	// the WM hand focus back and xclip take ownership of the selection.
+	// field they were editing. Done asynchronously with a delay to let
+	// the window manager hand focus back and clipboard ownership settle.
+	// Windows needs a longer delay (500ms) than Linux (150ms) for focus restoration.
 	if s.CurrentSettings().AutoPaste {
 		go func() {
-			time.Sleep(150 * time.Millisecond)
+			delay := 150 * time.Millisecond
+			// Increase delay on Windows to ensure previous window regains focus
+			if runtime.GOOS == "windows" {
+				delay = 500 * time.Millisecond
+			}
+			time.Sleep(delay)
 			if err := clipboard.SendPaste(); err != nil {
 				log.Printf("auto-paste: %v", err)
 			}

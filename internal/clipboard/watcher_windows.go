@@ -85,8 +85,12 @@ func (w *Watcher) loop(ctx context.Context) {
 }
 
 func (w *Watcher) tick(ctx context.Context) {
+	// Use a short timeout to avoid blocking other clipboard operations (e.g., Ctrl+C)
+	tickCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
 	// Try to read text first (most common)
-	text, err := readTextWindows(ctx)
+	text, err := readTextWindows(tickCtx)
 	if err == nil && text != "" {
 		h := hashString(text)
 		if w.swapHash(h) {
@@ -97,7 +101,7 @@ func (w *Watcher) tick(ctx context.Context) {
 	}
 
 	// Fall back to image
-	if img, err := readImageWindows(ctx); err == nil && len(img) > 0 {
+	if img, err := readImageWindows(tickCtx); err == nil && len(img) > 0 {
 		h := hashBytes(img)
 		if w.swapHash(h) {
 			return
@@ -108,6 +112,13 @@ func (w *Watcher) tick(ctx context.Context) {
 }
 
 func readTextWindows(ctx context.Context) (string, error) {
+	// Check context before attempting clipboard access
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
 	if !openClipboard() {
 		return "", fmt.Errorf("failed to open clipboard")
 	}
@@ -142,12 +153,12 @@ func readTextWindows(ctx context.Context) (string, error) {
 }
 
 func readImageWindows(ctx context.Context) ([]byte, error) {
-	// Recover from any panic to prevent app crash
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("DEBUG: PANIC in readImageWindows: %v\n", r)
-		}
-	}()
+	// Check context before attempting clipboard access
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 
 	if !openClipboard() {
 		return nil, fmt.Errorf("failed to open clipboard")

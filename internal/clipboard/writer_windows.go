@@ -53,9 +53,10 @@ func WriteText(s string) error {
 	return nil
 }
 
-// WriteImagePNG puts a PNG image onto the system clipboard as DIB format.
-// Converts PNG to DIB so standard applications can paste it.
+// WriteImagePNG puts a PNG image onto the system clipboard.
+// Writes PNG directly as CF_DIB since it's the most compatible format.
 func WriteImagePNG(pngBytes []byte) error {
+	// Decode PNG and convert to DIB format with proper row padding
 	img, _, err := image.Decode(bytes.NewReader(pngBytes))
 	if err != nil {
 		return fmt.Errorf("failed to decode PNG: %w", err)
@@ -75,9 +76,10 @@ func WriteImagePNG(pngBytes []byte) error {
 		return fmt.Errorf("failed to empty clipboard")
 	}
 
+	// Try setting as CF_DIB first (most compatible with Windows apps)
 	hMem, _, _ := procGlobalAlloc.Call(uintptr(GMEM_MOVEABLE), uintptr(len(dibData)))
 	if hMem == 0 {
-		return fmt.Errorf("failed to allocate global memory")
+		return fmt.Errorf("failed to allocate global memory for DIB")
 	}
 
 	lpMem, _, _ := procGlobalLock.Call(hMem)
@@ -91,7 +93,7 @@ func WriteImagePNG(pngBytes []byte) error {
 
 	if result, _, _ := procSetClipboardData.Call(uintptr(cfDIB), hMem); result == 0 {
 		procGlobalFree.Call(hMem)
-		return fmt.Errorf("failed to set clipboard data")
+		return fmt.Errorf("failed to set clipboard data as DIB: result=%d", result)
 	}
 
 	return nil
@@ -130,6 +132,10 @@ func imageToDIB(img image.Image) ([]byte, error) {
 		return nil, err
 	}
 
+	// DIB rows are stored bottom-to-top, each row padded to 4-byte boundary
+	rowSize := ((width*32 + 31) / 32) * 4 // Calculate row stride in bytes
+	padding := rowSize - (width * 4)
+
 	for y := height - 1; y >= 0; y-- {
 		for x := 0; x < width; x++ {
 			r32, g32, b32, a32 := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
@@ -142,6 +148,10 @@ func imageToDIB(img image.Image) ([]byte, error) {
 			buf.WriteByte(g)
 			buf.WriteByte(r)
 			buf.WriteByte(a)
+		}
+		// Add padding to align row to 4-byte boundary
+		for p := 0; p < padding; p++ {
+			buf.WriteByte(0)
 		}
 	}
 

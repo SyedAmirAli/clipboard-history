@@ -829,6 +829,8 @@ func (s *Service) ShowPopup() {
 	if s.ctx == nil {
 		return
 	}
+	// Save the currently focused window so we can restore it before pasting
+	clipboard.SaveFocusedWindow()
 	wailsruntime.WindowShow(s.ctx)
 	wailsruntime.WindowUnminimise(s.ctx) // restore if minimised to the taskbar
 	// In windowed mode the user owns the window position and stacking, so we

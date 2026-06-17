@@ -8,6 +8,12 @@ import (
 	"syscall"
 )
 
+// SaveFocusedWindow is a no-op on Linux.
+// On Windows, this stores the focused window before showing the popup.
+func SaveFocusedWindow() {
+	// Linux doesn't need focus restoration as xdotool handles it
+}
+
 // SendPaste synthesises a Ctrl+V key event into the focused window using xdotool.
 // On Wayland, this is a no-op because Wayland forbids synthetic input injection.
 func SendPaste() error {

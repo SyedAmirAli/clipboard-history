@@ -1,26 +1,19 @@
 {
   "name": "clipd",
+  "version": "2.0.0",
+  "description": "Lightweight clipboard history manager for Windows",
   "private": true,
   "scripts": {
     "frontend:build": "npm --prefix frontend run build",
+    "frontend:dev": "npm --prefix frontend run dev",
     "dev": "wails dev",
-    "dev:linux": "PATH=/usr/local/go/bin:/home/syedamirali/go/bin:$PATH XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config GOCACHE=/tmp/clipd-go-cache GOMODCACHE=/tmp/clipd-go-mod /home/syedamirali/go/bin/wails dev -tags \"webkit2_41\"",
-    "dev:windows": "set APPDATA=%TEMP%\\clipd-dev-data && set GOCACHE=%TEMP%\\clipd-go-cache && set GOMODCACHE=%TEMP%\\clipd-go-mod && wails dev",
-    "test": "go test ./...",
-    "test:verbose": "go test -v ./...",
-    "build": "./scripts/build.sh deb",
-    "build:bin": "./scripts/build.sh",
-    "build:deb": "./scripts/build.sh deb",
-    "build:windows": ".\\scripts\\build-windows.bat",
-    "start": "set APPDATA=%TEMP%\\clipd-dev-data && .\\build\\bin\\clipd.exe",
-    "start:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd",
-    "show": "set APPDATA=%TEMP%\\clipd-dev-data && .\\build\\bin\\clipd.exe show",
-    "show:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd show",
-    "stop": "set APPDATA=%TEMP%\\clipd-dev-data && .\\build\\bin\\clipd.exe quit",
-    "stop:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd quit",
-    "vault:reset": "set APPDATA=%TEMP%\\clipd-dev-data && .\\build\\bin\\clipd.exe reset-vault",
-    "vault:reset:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd reset-vault",
-    "reset:dev": "rmdir /s /q %TEMP%\\clipd-dev-data",
-    "reset:dev:linux": "rm -rf /tmp/clipd-dev-data"
+    "test": "go test ./... -v",
+    "build": "wails build",
+    "build:windows": "wails build",
+    "start": ".\\build\\bin\\clipd.exe",
+    "show": ".\\build\\bin\\clipd.exe show",
+    "stop": ".\\build\\bin\\clipd.exe quit",
+    "vault:reset": ".\\build\\bin\\clipd.exe reset-vault",
+    "reset:dev": "rmdir /s /q %TEMP%\\clipd-dev-data 2>nul || true"
   }
 }

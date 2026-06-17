@@ -50,6 +50,3 @@ type Settings struct {
 
 // DefaultSettings returns platform-specific default settings.
 // Implemented in types_windows.go and types_linux.go
-func DefaultSettings() Settings {
-	panic("DefaultSettings must be implemented by platform-specific code")
-}

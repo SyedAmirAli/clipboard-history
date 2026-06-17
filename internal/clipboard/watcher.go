@@ -42,12 +42,6 @@ func NewWatcher(interval time.Duration) *Watcher {
 // Events returns the read-only channel of clipboard change events.
 func (w *Watcher) Events() <-chan Event { return w.events }
 
-// Start launches the poll loop. Platform-specific implementation required.
-func (w *Watcher) Start(ctx context.Context) error {
-	// Implemented in watcher_linux.go or watcher_windows.go
-	panic("Start must be implemented by platform-specific code")
-}
-
 // Stop signals the watcher to exit and waits briefly for cleanup.
 func (w *Watcher) Stop() {
 	if w.cancel != nil {

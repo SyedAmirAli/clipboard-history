@@ -11,10 +11,28 @@ import (
 )
 
 var (
+	kernel32DLL = syscall.NewLazyDLL("kernel32.dll")
+	user32DLL   = syscall.NewLazyDLL("user32.dll")
+
 	procGetClipboardOwner          = user32DLL.NewProc("GetClipboardOwner")
 	procGetClipboardData           = user32DLL.NewProc("GetClipboardData")
 	procGlobalSize                 = kernel32DLL.NewProc("GlobalSize")
 	procIsClipboardFormatAvailable = user32DLL.NewProc("IsClipboardFormatAvailable")
+	procSetClipboardData           = user32DLL.NewProc("SetClipboardData")
+	procEmptyClipboard             = user32DLL.NewProc("EmptyClipboard")
+	procGlobalAlloc                = kernel32DLL.NewProc("GlobalAlloc")
+	procGlobalFree                 = kernel32DLL.NewProc("GlobalFree")
+	procGlobalLock                 = kernel32DLL.NewProc("GlobalLock")
+	procGlobalUnlock               = kernel32DLL.NewProc("GlobalUnlock")
+	procOpenClipboard              = user32DLL.NewProc("OpenClipboard")
+	procCloseClipboard             = user32DLL.NewProc("CloseClipboard")
+)
+
+const (
+	cfText = 1
+	cfDIB  = 8
+	cfPNG  = 49320
+	GMEM_MOVEABLE = 0x0002
 )
 
 func hashString(s string) string {

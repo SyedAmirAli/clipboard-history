@@ -9,14 +9,23 @@ import (
 )
 
 var (
+	kernel32DLL = syscall.NewLazyDLL("kernel32.dll")
+	user32DLL   = syscall.NewLazyDLL("user32.dll")
+
 	procSetClipboardData  = user32DLL.NewProc("SetClipboardData")
 	procEmptyClipboard    = user32DLL.NewProc("EmptyClipboard")
 	procGlobalAlloc       = kernel32DLL.NewProc("GlobalAlloc")
 	procGlobalFree        = kernel32DLL.NewProc("GlobalFree")
+	procGlobalLock        = kernel32DLL.NewProc("GlobalLock")
+	procGlobalUnlock      = kernel32DLL.NewProc("GlobalUnlock")
+	procOpenClipboard     = user32DLL.NewProc("OpenClipboard")
+	procCloseClipboard    = user32DLL.NewProc("CloseClipboard")
 )
 
 const (
 	GMEM_MOVEABLE = 0x0002
+	cfText        = 1
+	cfPNG         = 49320
 )
 
 // WriteText puts the given UTF-8 string onto the system clipboard using Win32 API.
@@ -57,6 +66,16 @@ func WriteText(s string) error {
 
 	// Note: After SetClipboardData succeeds, Windows owns the memory, don't free it
 	return nil
+}
+
+func openClipboard() bool {
+	r, _, _ := procOpenClipboard.Call(0)
+	return r != 0
+}
+
+func closeClipboard() bool {
+	r, _, _ := procCloseClipboard.Call()
+	return r != 0
 }
 
 // WriteImagePNG puts a PNG image onto the system clipboard.

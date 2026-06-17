@@ -3,9 +3,7 @@
 package clipboard
 
 import (
-	"fmt"
 	"syscall"
-	"unsafe"
 )
 
 var (

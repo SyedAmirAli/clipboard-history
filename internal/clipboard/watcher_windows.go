@@ -11,21 +11,27 @@ import (
 )
 
 var (
-	kernel32DLL = syscall.NewLazyDLL("kernel32.dll")
-	user32DLL   = syscall.NewLazyDLL("user32.dll")
-
-	procOpenClipboard              = user32DLL.NewProc("OpenClipboard")
-	procCloseClipboard             = user32DLL.NewProc("CloseClipboard")
 	procGetClipboardOwner          = user32DLL.NewProc("GetClipboardOwner")
 	procGetClipboardData           = user32DLL.NewProc("GetClipboardData")
-	procGlobalLock                 = kernel32DLL.NewProc("GlobalLock")
-	procGlobalUnlock               = kernel32DLL.NewProc("GlobalUnlock")
 	procGlobalSize                 = kernel32DLL.NewProc("GlobalSize")
 	procIsClipboardFormatAvailable = user32DLL.NewProc("IsClipboardFormatAvailable")
-
-	cfText uint32 = 1
-	cfDIB  uint32 = 8 // Device-independent bitmap
 )
+
+func hashString(s string) string {
+	h := [32]byte{}
+	for i, c := range s {
+		h[i%32] ^= byte(c)
+	}
+	return fmt.Sprintf("%x", h[:])
+}
+
+func hashBytes(data []byte) string {
+	h := [32]byte{}
+	for i, b := range data {
+		h[i%32] ^= b
+	}
+	return fmt.Sprintf("%x", h[:])
+}
 
 // Start launches the poll loop for Windows.
 func (w *Watcher) Start(ctx context.Context) error {

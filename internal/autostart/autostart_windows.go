@@ -8,15 +8,6 @@ import (
 	"os/exec"
 )
 
-// Manager implements autostart management for Windows using the Registry via reg.exe.
-// Registry path: HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-type Manager struct {
-	ExecOverride string // Override for tests
-}
-
-// New returns a Manager for Windows autostart.
-func New() *Manager { return &Manager{} }
-
 // SetEnabled turns login autostart on or off by adding/removing a registry entry.
 func (m *Manager) SetEnabled(enabled bool) error {
 	regPath := `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`

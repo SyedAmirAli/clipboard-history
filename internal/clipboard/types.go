@@ -48,18 +48,8 @@ type Settings struct {
 	AutoPaste bool `json:"autoPaste"`
 }
 
-// DefaultSettings returns the baseline settings used on first run.
+// DefaultSettings returns platform-specific default settings.
+// Implemented in types_windows.go and types_linux.go
 func DefaultSettings() Settings {
-	return Settings{
-		Hotkey:      "Super+V",
-		MaxItems:    200,
-		KeepImages:  true,
-		MaxImageMB:  5,
-		Theme:       "auto",
-		Autostart:   false,
-		HideOnBlur:  true,
-		LaunchAtTop: false,
-		WindowFrame: true,
-		AutoPaste:   true,
-	}
+	panic("DefaultSettings must be implemented by platform-specific code")
 }

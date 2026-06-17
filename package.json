@@ -1,17 +1,19 @@
 {
   "name": "clipd",
+  "version": "2.0.0",
+  "description": "Lightweight clipboard history manager for Windows",
   "private": true,
   "scripts": {
     "frontend:build": "npm --prefix frontend run build",
-    "dev": "PATH=/usr/local/go/bin:/home/syedamirali/go/bin:$PATH XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config GOCACHE=/tmp/clipd-go-cache GOMODCACHE=/tmp/clipd-go-mod /home/syedamirali/go/bin/wails dev -tags \"webkit2_41\"",
-    "test": "GOCACHE=/tmp/clipd-go-cache GOMODCACHE=/tmp/clipd-go-mod /usr/local/go/bin/go test ./...",
-    "build": "PATH=/usr/local/go/bin:/home/syedamirali/go/bin:$PATH GOCACHE=/tmp/clipd-go-cache GOMODCACHE=/tmp/clipd-go-mod ./scripts/build.sh deb",
-    "build:bin": "PATH=/usr/local/go/bin:/home/syedamirali/go/bin:$PATH GOCACHE=/tmp/clipd-go-cache GOMODCACHE=/tmp/clipd-go-mod ./scripts/build.sh",
-    "build:deb": "PATH=/usr/local/go/bin:/home/syedamirali/go/bin:$PATH GOCACHE=/tmp/clipd-go-cache GOMODCACHE=/tmp/clipd-go-mod ./scripts/build.sh deb",
-    "start": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd",
-    "show": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd show",
-    "stop": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd quit",
-    "vault:reset": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd reset-vault",
-    "reset:dev": "rm -rf /tmp/clipd-dev-data/clipd"
+    "frontend:dev": "npm --prefix frontend run dev",
+    "dev": "wails dev",
+    "test": "go test ./... -v",
+    "build": "wails build",
+    "build:windows": "wails build",
+    "start": ".\\build\\bin\\clipd.exe",
+    "show": ".\\build\\bin\\clipd.exe show",
+    "stop": ".\\build\\bin\\clipd.exe quit",
+    "vault:reset": ".\\build\\bin\\clipd.exe reset-vault",
+    "reset:dev": "rmdir /s /q %TEMP%\\clipd-dev-data 2>nul || true"
   }
 }

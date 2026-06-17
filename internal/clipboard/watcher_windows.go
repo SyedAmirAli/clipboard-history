@@ -3,8 +3,13 @@
 package clipboard
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"syscall"
 	"time"
 	"unsafe"
@@ -142,14 +147,136 @@ func readImageWindows(ctx context.Context) ([]byte, error) {
 	}
 	defer closeClipboard()
 
-	// Try DIB (Device-Independent Bitmap) format - most common for images
-	if isFormatAvailable(cfDIB) {
-		// For now, we don't support DIB conversion
-		// TODO: Implement proper DIB to PNG conversion
-		return nil, fmt.Errorf("image format not yet supported on Windows")
+	if !isFormatAvailable(cfDIB) {
+		return nil, fmt.Errorf("no image format available")
 	}
 
-	return nil, fmt.Errorf("no image format available")
+	handle, _, _ := procGetClipboardData.Call(uintptr(cfDIB))
+	if handle == 0 {
+		return nil, fmt.Errorf("failed to get clipboard image data")
+	}
+
+	lockedPtr, _, _ := procGlobalLock.Call(handle)
+	if lockedPtr == 0 {
+		return nil, fmt.Errorf("failed to lock clipboard image")
+	}
+	defer procGlobalUnlock.Call(handle)
+
+	size, _, _ := procGlobalSize.Call(handle)
+	if size == 0 {
+		return nil, fmt.Errorf("failed to get clipboard image size")
+	}
+
+	dibData := (*[1 << 30]byte)(unsafe.Pointer(lockedPtr))[:size:size]
+
+	img, err := dibToImage(dibData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert DIB to image: %w", err)
+	}
+
+	var pngBuf bytes.Buffer
+	if err := png.Encode(&pngBuf, img); err != nil {
+		return nil, fmt.Errorf("failed to encode image as PNG: %w", err)
+	}
+
+	return pngBuf.Bytes(), nil
+}
+
+func dibToImage(dibData []byte) (image.Image, error) {
+	if len(dibData) < 40 {
+		return nil, fmt.Errorf("DIB data too small for header")
+	}
+
+	reader := bytes.NewReader(dibData)
+	var hdr struct {
+		Size      uint32
+		Width     int32
+		Height    int32
+		Planes    uint16
+		BitCount  uint16
+		Compress  uint32
+		ImageSize uint32
+		XPelsPerM int32
+		YPelsPerM int32
+		ClrUsed   uint32
+		ClrImport uint32
+	}
+
+	if err := binary.Read(reader, binary.LittleEndian, &hdr); err != nil {
+		return nil, err
+	}
+
+	if hdr.Width <= 0 || hdr.Height <= 0 {
+		return nil, fmt.Errorf("invalid DIB dimensions: %dx%d", hdr.Width, hdr.Height)
+	}
+
+	height := int(hdr.Height)
+	if hdr.Height < 0 {
+		height = -height
+	}
+
+	rect := image.Rect(0, 0, int(hdr.Width), height)
+	dst := image.NewRGBA(rect)
+
+	switch hdr.BitCount {
+	case 24, 32:
+		if err := decodeDIBPixels(reader, dst, int(hdr.Width), height, int(hdr.BitCount)); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unsupported DIB bit count: %d", hdr.BitCount)
+	}
+
+	return dst, nil
+}
+
+func decodeDIBPixels(reader *bytes.Reader, dst *image.RGBA, width, height, bitCount int) error {
+	bytesPerPixel := bitCount / 8
+	rowSize := ((width*bitCount + 31) / 32) * 4
+
+	for y := height - 1; y >= 0; y-- {
+		for x := 0; x < width; x++ {
+			var b, g, r, a uint8 = 0, 0, 0, 255
+
+			if bitCount == 24 {
+				if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
+					return err
+				}
+				if err := binary.Read(reader, binary.LittleEndian, &g); err != nil {
+					return err
+				}
+				if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
+					return err
+				}
+			} else if bitCount == 32 {
+				if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
+					return err
+				}
+				if err := binary.Read(reader, binary.LittleEndian, &g); err != nil {
+					return err
+				}
+				if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
+					return err
+				}
+				if err := binary.Read(reader, binary.LittleEndian, &a); err != nil {
+					return err
+				}
+			}
+
+			dst.SetRGBA(x, y, color.RGBA{r, g, b, a})
+		}
+
+		readBytes := width * bytesPerPixel
+		padding := rowSize - readBytes
+		if padding > 0 {
+			_, err := reader.Read(make([]byte, padding))
+			if err != nil && err.Error() != "EOF" {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func openClipboard() bool {

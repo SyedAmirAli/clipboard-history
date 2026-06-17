@@ -112,7 +112,8 @@ func (s *Service) IngestText(text, hash string) error {
 
 // IngestImage is invoked by the main loop for image clipboard payloads.
 // It auto-rejects images larger than the user-configured cap.
-func (s *Service) IngestImage(png []byte, hash string) error {
+// Automatically converts any image format (JPEG, GIF, BMP) to PNG for storage.
+func (s *Service) IngestImage(imgBytes []byte, hash string) error {
 	if s.isVaultSuppressed(hash) {
 		return nil
 	}
@@ -120,14 +121,20 @@ func (s *Service) IngestImage(png []byte, hash string) error {
 	if !settings.KeepImages {
 		return nil
 	}
-	if settings.MaxImageMB > 0 && len(png) > settings.MaxImageMB*1024*1024 {
-		return fmt.Errorf("image %d bytes exceeds %d MB cap", len(png), settings.MaxImageMB)
+
+	pngBytes, err := thumbnail.ToPNG(imgBytes)
+	if err != nil {
+		return fmt.Errorf("failed to convert image to PNG: %w", err)
 	}
-	thumb, w, h, err := thumbnail.DataURL(png)
+
+	if settings.MaxImageMB > 0 && len(pngBytes) > settings.MaxImageMB*1024*1024 {
+		return fmt.Errorf("image %d bytes exceeds %d MB cap", len(pngBytes), settings.MaxImageMB)
+	}
+	thumb, w, h, err := thumbnail.DataURL(pngBytes)
 	if err != nil {
 		return err
 	}
-	res, err := s.store.AddImage(png, thumb, hash, w, h)
+	res, err := s.store.AddImage(pngBytes, thumb, hash, w, h)
 	if err != nil {
 		return err
 	}

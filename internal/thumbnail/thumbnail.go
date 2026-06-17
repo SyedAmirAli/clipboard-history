@@ -8,20 +8,23 @@ import (
 	"encoding/base64"
 	"fmt"
 	"image"
+	_ "image/gif"
+	_ "image/jpeg"
 	"image/png"
 )
 
 // MaxDim is the longest edge (in pixels) of generated thumbnails.
 const MaxDim = 160
 
-// DataURL takes raw PNG bytes and returns a small PNG thumbnail encoded
-// as a "data:image/png;base64,..." URL suitable for an <img src>.
-// The returned width/height are the natural dimensions of the source
-// image (NOT the thumbnail), which the UI uses for display metadata.
-func DataURL(pngBytes []byte) (dataURL string, srcW, srcH int, err error) {
-	src, err := png.Decode(bytes.NewReader(pngBytes))
+// DataURL takes raw image bytes (PNG, JPEG, GIF, or BMP) and returns a small
+// PNG thumbnail encoded as a "data:image/png;base64,..." URL suitable for
+// an <img src>. The returned width/height are the natural dimensions of the
+// source image (NOT the thumbnail), which the UI uses for display metadata.
+// If the input is not PNG, it's automatically converted to PNG for storage.
+func DataURL(imgBytes []byte) (dataURL string, srcW, srcH int, err error) {
+	src, _, err := image.Decode(bytes.NewReader(imgBytes))
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("decode png: %w", err)
+		return "", 0, 0, fmt.Errorf("decode image: %w", err)
 	}
 	b := src.Bounds()
 	srcW, srcH = b.Dx(), b.Dy()
@@ -36,6 +39,27 @@ func DataURL(pngBytes []byte) (dataURL string, srcW, srcH int, err error) {
 		return "", srcW, srcH, fmt.Errorf("encode thumb: %w", err)
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes()), srcW, srcH, nil
+}
+
+// ToPNG converts any image format (PNG, JPEG, GIF, BMP) to PNG bytes.
+// If already PNG, returns the input unchanged. Used to normalize image
+// formats for clipboard storage.
+func ToPNG(imgBytes []byte) ([]byte, error) {
+	src, format, err := image.Decode(bytes.NewReader(imgBytes))
+	if err != nil {
+		return nil, fmt.Errorf("decode image: %w", err)
+	}
+
+	if format == "png" {
+		return imgBytes, nil
+	}
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, src); err != nil {
+		return nil, fmt.Errorf("encode to PNG: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 // fitWithin returns dimensions for an image scaled so the longest edge

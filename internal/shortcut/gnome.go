@@ -1,3 +1,5 @@
+//go:build linux
+
 // Package shortcut installs a desktop-level global keyboard shortcut that
 // runs `clipd toggle`. It exists because Wayland — unlike X11 — does not
 // let an application grab a global hotkey for itself; the binding has to be

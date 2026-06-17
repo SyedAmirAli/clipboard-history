@@ -1,18 +1,18 @@
-//go:build linux
-
-// Package hotkey registers a single global keyboard shortcut on X11.
+// Package hotkey registers a single global keyboard shortcut (cross-platform).
 //
 // The hotkey string format is a "+"-separated list of modifiers and a
-// single key, e.g. "Super+V", "Ctrl+Alt+H", "Ctrl+Shift+,". Modifier
+// single key, e.g. "Win+J", "Ctrl+Alt+H", "Ctrl+Shift+,". Modifier
 // names are case-insensitive. Recognised modifiers:
 //
-//	Super, Meta, Mod4 → Mod4Mask  (Linux "Windows" key)
-//	Ctrl, Control     → ControlMask
-//	Alt, Mod1         → Mod1Mask
-//	Shift             → ShiftMask
+//	Win, Super, Meta, Mod4 → Windows key
+//	Ctrl, Control          → Ctrl key
+//	Alt, Mod1              → Alt key
+//	Shift                  → Shift key
 //
 // The trailing token must be a single ASCII alphanumeric or one of a
 // small set of named keys ("Space", "Enter", "Tab", "Escape").
+//
+// Works on both Windows and Linux via golang.design/x/hotkey.
 package hotkey
 
 import (
@@ -110,17 +110,16 @@ func parseSpec(spec string) ([]gh.Modifier, gh.Key, error) {
 	return mods, key, nil
 }
 
-// On Linux, golang.design/x/hotkey only exposes raw X11 modifier masks
-// (Mod1..Mod5) plus ModCtrl/ModShift. We map the friendly names to the
-// correct mask: Super/Meta/Win → Mod4, Alt → Mod1.
+// Map friendly modifier names to golang.design/x/hotkey modifiers.
+// Cross-platform: works on both Windows and Linux.
 func modifierFor(name string) (gh.Modifier, bool) {
 	switch strings.ToLower(name) {
 	case "super", "meta", "mod4", "win":
-		return gh.Mod4, true
+		return gh.ModWin, true
 	case "ctrl", "control":
 		return gh.ModCtrl, true
 	case "alt", "mod1":
-		return gh.Mod1, true
+		return gh.ModAlt, true
 	case "shift":
 		return gh.ModShift, true
 	}

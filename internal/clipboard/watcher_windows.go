@@ -244,26 +244,34 @@ func decodeDIBPixels(reader *bytes.Reader, dst *image.RGBA, width, height, bitCo
 
 			if bitCount == 24 {
 				if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
-					return err
+					// EOF or read error: fill rest with black, return success
+					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading 24-bit pixel\n", x, y)
+					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &g); err != nil {
-					return err
+					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading green channel\n", x, y)
+					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
-					return err
+					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading red channel\n", x, y)
+					return nil
 				}
 			} else if bitCount == 32 {
 				if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
-					return err
+					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading blue channel\n", x, y)
+					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &g); err != nil {
-					return err
+					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading green channel\n", x, y)
+					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
-					return err
+					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading red channel\n", x, y)
+					return nil
 				}
 				if err := binary.Read(reader, binary.LittleEndian, &a); err != nil {
-					return err
+					fmt.Printf("DEBUG: Hit EOF at pixel (%d,%d) while reading alpha channel\n", x, y)
+					return nil
 				}
 			}
 

@@ -1,26 +1,19 @@
 {
   "name": "clipd",
+  "version": "2.0.0",
+  "description": "Lightweight clipboard history manager for Windows",
   "private": true,
   "scripts": {
     "frontend:build": "npm --prefix frontend run build",
+    "frontend:dev": "npm --prefix frontend run dev",
     "dev": "wails dev",
-    "dev:windows": "wails dev",
-    "dev:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config GOCACHE=/tmp/clipd-go-cache GOMODCACHE=/tmp/clipd-go-mod wails dev -tags webkit2_41",
-    "test": "go test ./...",
-    "test:verbose": "go test -v ./...",
+    "test": "go test ./... -v",
     "build": "wails build",
     "build:windows": "wails build",
-    "build:bin": "./scripts/build.sh",
-    "build:deb": "./scripts/build.sh deb",
     "start": ".\\build\\bin\\clipd.exe",
-    "start:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd",
     "show": ".\\build\\bin\\clipd.exe show",
-    "show:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd show",
     "stop": ".\\build\\bin\\clipd.exe quit",
-    "stop:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd quit",
     "vault:reset": ".\\build\\bin\\clipd.exe reset-vault",
-    "vault:reset:linux": "XDG_DATA_HOME=/tmp/clipd-dev-data XDG_CONFIG_HOME=/tmp/clipd-dev-config ./build/bin/clipd reset-vault",
-    "reset:dev": "rmdir /s /q %TEMP%\\clipd-dev-data 2>nul || true",
-    "reset:dev:linux": "rm -rf /tmp/clipd-dev-data"
+    "reset:dev": "rmdir /s /q %TEMP%\\clipd-dev-data 2>nul || true"
   }
 }

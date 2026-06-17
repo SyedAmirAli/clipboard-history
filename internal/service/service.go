@@ -125,6 +125,7 @@ func (s *Service) IngestImage(imgBytes []byte, hash string) error {
 
 	pngBytes, err := thumbnail.ToPNG(imgBytes)
 	if err != nil {
+		log.Printf("IngestImage: ToPNG failed on %d bytes: %v", len(imgBytes), err)
 		return fmt.Errorf("failed to convert image to PNG: %w", err)
 	}
 

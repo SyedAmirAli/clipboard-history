@@ -171,6 +171,7 @@ func readImageWindows(ctx context.Context) ([]byte, error) {
 
 	img, err := dibToImage(dibData)
 	if err != nil {
+		fmt.Printf("DEBUG: dibToImage failed on %d bytes: %v\n", len(dibData), err)
 		return nil, fmt.Errorf("failed to convert DIB to image: %w", err)
 	}
 
@@ -207,8 +208,10 @@ func dibToImage(dibData []byte) (image.Image, error) {
 	}
 
 	if hdr.Width <= 0 || hdr.Height <= 0 {
-		return nil, fmt.Errorf("invalid DIB dimensions: %dx%d", hdr.Width, hdr.Height)
+		return nil, fmt.Errorf("invalid DIB dimensions: %dx%d (BitCount: %d)", hdr.Width, hdr.Height, hdr.BitCount)
 	}
+
+	fmt.Printf("DEBUG: DIB header - Size:%d Width:%d Height:%d BitCount:%d Compress:%d\n", hdr.Size, hdr.Width, hdr.Height, hdr.BitCount, hdr.Compress)
 
 	height := int(hdr.Height)
 	if hdr.Height < 0 {
@@ -221,10 +224,11 @@ func dibToImage(dibData []byte) (image.Image, error) {
 	switch hdr.BitCount {
 	case 24, 32:
 		if err := decodeDIBPixels(reader, dst, int(hdr.Width), height, int(hdr.BitCount)); err != nil {
-			return nil, err
+			fmt.Printf("DEBUG: decodeDIBPixels failed: %v\n", err)
+			return nil, fmt.Errorf("decode pixels (BitCount=%d, %dx%d): %w", hdr.BitCount, hdr.Width, height, err)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported DIB bit count: %d", hdr.BitCount)
+		return nil, fmt.Errorf("unsupported DIB bit count: %d (Width:%d Height:%d)", hdr.BitCount, hdr.Width, hdr.Height)
 	}
 
 	return dst, nil

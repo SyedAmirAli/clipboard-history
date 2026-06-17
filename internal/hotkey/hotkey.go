@@ -1,3 +1,5 @@
+//go:build linux
+
 // Package hotkey registers a single global keyboard shortcut on X11.
 //
 // The hotkey string format is a "+"-separated list of modifiers and a

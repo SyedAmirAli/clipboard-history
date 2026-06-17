@@ -1,11 +1,9 @@
 // Package autostart manages whether clipd launches on login.
-// On Linux: manages .desktop files. On Windows: manages registry entries.
-// Platform-specific implementations in autostart_linux.go and autostart_windows.go.
+// Platform-specific implementations in autostart_windows.go and autostart_linux.go
 package autostart
 
 // Manager implements service.AutostartManager.
 type Manager struct {
-	// ExecOverride lets tests / dev mode use a non-default binary path.
 	ExecOverride string
 }
 

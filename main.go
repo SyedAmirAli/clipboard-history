@@ -339,20 +339,8 @@ func waitUntilStopped(sockPath string, timeout time.Duration) bool {
 	return !ipc.IsRunning(sockPath)
 }
 
-// launchDetached starts a fresh clipd process fully detached from the current
-// one (new session), so it keeps running after this CLI invocation exits.
-func launchDetached() error {
-	self, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command(self)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	cmd.Stdin = nil
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Start()
-}
+// launchDetached starts a fresh clipd process fully detached from the current one.
+// Platform-specific implementations in main_linux.go and main_windows.go.
 
 func printUsage() {
 	fmt.Print(`clipd — clipboard history manager

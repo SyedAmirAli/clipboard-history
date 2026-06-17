@@ -3,35 +3,38 @@ package clipboard
 import (
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
 // Server identifies the display-server protocol clipd is running under.
-// The external clipboard tools differ between the two: X11 uses
-// xclip/xdotool, Wayland uses wl-clipboard (wl-paste / wl-copy). clipd
-// ships as a single binary and picks the right backend at runtime — the
-// display server is a session-level choice (you can run X11 or Wayland on
-// the same distro), so it must be detected, never baked in at build time.
+// On Windows, this is ServerWindows. On Linux, X11 or Wayland.
 type Server int
 
 const (
 	ServerX11 Server = iota
 	ServerWayland
+	ServerWindows
 )
 
 func (s Server) String() string {
-	if s == ServerWayland {
+	switch s {
+	case ServerWayland:
 		return "wayland"
+	case ServerWindows:
+		return "windows"
+	default:
+		return "x11"
 	}
-	return "x11"
 }
 
-// DetectServer inspects the environment to decide whether we're on Wayland
-// or X11. WAYLAND_DISPLAY is the most reliable signal — it's exported by the
-// compositor for every client — with XDG_SESSION_TYPE as a fallback for odd
-// setups. Anything else is treated as X11, the safe default for legacy
-// desktops (and the only one xclip/xdotool can drive).
+// DetectServer inspects the environment to decide which platform we're on.
+// On Windows, returns ServerWindows. On Linux, detects Wayland vs X11.
 func DetectServer() Server {
+	if runtime.GOOS == "windows" {
+		return ServerWindows
+	}
+	// Linux: detect X11 vs Wayland
 	if os.Getenv("WAYLAND_DISPLAY") != "" {
 		return ServerWayland
 	}
@@ -45,9 +48,11 @@ func DetectServer() Server {
 func IsWayland() bool { return DetectServer() == ServerWayland }
 
 // requiredTools returns the external commands clipd needs to capture and
-// set the clipboard for the given server. Missing ones make history
-// capture impossible, so the caller surfaces them to the user.
+// set the clipboard for the given server. For Windows, returns empty (built-in).
 func requiredTools(s Server) []string {
+	if s == ServerWindows {
+		return []string{} // Windows uses built-in Win32 API
+	}
 	if s == ServerWayland {
 		return []string{"wl-paste", "wl-copy"}
 	}

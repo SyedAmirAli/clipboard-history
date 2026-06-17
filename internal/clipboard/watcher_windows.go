@@ -142,6 +142,13 @@ func readTextWindows(ctx context.Context) (string, error) {
 }
 
 func readImageWindows(ctx context.Context) ([]byte, error) {
+	// Recover from any panic to prevent app crash
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("DEBUG: PANIC in readImageWindows: %v\n", r)
+		}
+	}()
+
 	if !openClipboard() {
 		return nil, fmt.Errorf("failed to open clipboard")
 	}
@@ -167,6 +174,12 @@ func readImageWindows(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("failed to get clipboard image size")
 	}
 
+	// Safety limit: don't try to process images larger than 100MB
+	const maxImageSize = 100 * 1024 * 1024
+	if size > maxImageSize {
+		return nil, fmt.Errorf("clipboard image too large: %d bytes (max: %d)", size, maxImageSize)
+	}
+
 	dibData := (*[1 << 30]byte)(unsafe.Pointer(lockedPtr))[:size:size]
 
 	img, err := dibToImage(dibData)
@@ -177,6 +190,7 @@ func readImageWindows(ctx context.Context) ([]byte, error) {
 
 	var pngBuf bytes.Buffer
 	if err := png.Encode(&pngBuf, img); err != nil {
+		fmt.Printf("DEBUG: PNG encoding failed: %v\n", err)
 		return nil, fmt.Errorf("failed to encode image as PNG: %w", err)
 	}
 
@@ -184,6 +198,8 @@ func readImageWindows(ctx context.Context) ([]byte, error) {
 }
 
 func dibToImage(dibData []byte) (image.Image, error) {
+	const maxDimension = 16000 // reasonable screen resolution limit
+
 	if len(dibData) < 40 {
 		return nil, fmt.Errorf("DIB data too small for header")
 	}
@@ -209,6 +225,11 @@ func dibToImage(dibData []byte) (image.Image, error) {
 
 	if hdr.Width <= 0 || hdr.Height <= 0 {
 		return nil, fmt.Errorf("invalid DIB dimensions: %dx%d (BitCount: %d)", hdr.Width, hdr.Height, hdr.BitCount)
+	}
+
+	// Prevent allocating huge images
+	if hdr.Width > maxDimension || hdr.Height > maxDimension {
+		return nil, fmt.Errorf("DIB dimensions too large: %dx%d (max: %d)", hdr.Width, hdr.Height, maxDimension)
 	}
 
 	fmt.Printf("DEBUG: DIB header - Size:%d Width:%d Height:%d BitCount:%d Compress:%d\n", hdr.Size, hdr.Width, hdr.Height, hdr.BitCount, hdr.Compress)

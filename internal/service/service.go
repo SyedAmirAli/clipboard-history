@@ -63,18 +63,20 @@ type AutostartManager interface {
 
 // Service is bound onto the Wails runtime. All methods are JS-callable.
 type Service struct {
-	store         *db.Store
-	hotkeyMgr     HotkeySetter
-	suppressor    WatcherSuppressor
-	autostart     AutostartManager
-	visible       atomic.Bool
-	ctx           context.Context
-	settingsLog   atomic.Value // last loaded clipboard.Settings, for hotkey diffing
-	vaultMu       sync.Mutex
-	vaultKey      []byte
-	vaultExpiry   time.Time
-	pendingSetup  *vault.SetupBundle
-	vaultSuppress map[string]time.Time
+	store            *db.Store
+	hotkeyMgr        HotkeySetter
+	suppressor       WatcherSuppressor
+	autostart        AutostartManager
+	visible          atomic.Bool
+	ctx              context.Context
+	settingsLog      atomic.Value // last loaded clipboard.Settings, for hotkey diffing
+	vaultMu          sync.Mutex
+	vaultKey         []byte
+	vaultExpiry      time.Time
+	pendingSetup     *vault.SetupBundle
+	vaultSuppress    map[string]time.Time
+	lastImageWriteMu sync.Mutex
+	lastImageWrite   time.Time // track when we last wrote an image to prevent re-ingestion loops
 }
 
 // New constructs a Service with all wiring dependencies.
@@ -118,6 +120,17 @@ func (s *Service) IngestImage(imgBytes []byte, hash string) error {
 	if s.isVaultSuppressed(hash) {
 		return nil
 	}
+
+	// Skip re-ingesting images we just wrote to clipboard (2-second window)
+	// This prevents infinite loops when pasting causes watcher to re-read the clipboard
+	s.lastImageWriteMu.Lock()
+	if time.Since(s.lastImageWrite) < 2*time.Second {
+		s.lastImageWriteMu.Unlock()
+		log.Printf("IngestImage: Skipping re-ingestion of image we just wrote (within 2s window)")
+		return nil
+	}
+	s.lastImageWriteMu.Unlock()
+
 	settings := s.CurrentSettings()
 	if !settings.KeepImages {
 		return nil
@@ -192,6 +205,10 @@ func (s *Service) writeToClipboard(id int64) error {
 		return clipboard.WriteText(text)
 	case clipboard.ContentTypeImage:
 		s.suppressor.Suppress("i:" + sumHex(blob))
+		// Record that we're writing an image to prevent re-ingestion loop
+		s.lastImageWriteMu.Lock()
+		s.lastImageWrite = time.Now()
+		s.lastImageWriteMu.Unlock()
 		return clipboard.WriteImagePNG(blob)
 	default:
 		return fmt.Errorf("unknown content_type: %s", ct)

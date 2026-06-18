@@ -1,7 +1,6 @@
-// Package ipc provides a control channel for inter-process communication.
-// On Linux: Unix domain sockets. On Windows: Named pipes.
-// This allows a second `clipd` invocation to drive the already-running instance —
-// e.g. `clipd toggle` to pop the window open.
+// Package ipc provides a control channel for inter-process communication
+// over a Windows named pipe. This allows a second `clipd` invocation to drive
+// the already-running instance — e.g. `clipd toggle` to pop the window open.
 package ipc
 
 // Commands understood by the listener.
@@ -22,5 +21,4 @@ func ValidCommand(cmd string) bool {
 	}
 }
 
-// IsRunning and Send are implemented in ipc_linux.go and ipc_windows.go
-// Listener is also implemented in platform-specific files.
+// IsRunning, Send, and Listener are implemented in ipc_windows.go.

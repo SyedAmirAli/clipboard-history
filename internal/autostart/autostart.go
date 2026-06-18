@@ -1,5 +1,5 @@
 // Package autostart manages whether clipd launches on login.
-// Platform-specific implementations in autostart_windows.go and autostart_linux.go
+// The implementation lives in autostart_windows.go (Windows registry).
 package autostart
 
 // Manager implements service.AutostartManager.

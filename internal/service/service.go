@@ -10,8 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -56,7 +54,7 @@ type WatcherSuppressor interface {
 	Suppress(hash string)
 }
 
-// AutostartManager toggles the freedesktop autostart .desktop entry.
+// AutostartManager toggles the Windows "run at login" registry entry.
 type AutostartManager interface {
 	SetEnabled(enabled bool) error
 	IsEnabled() (bool, error)
@@ -95,7 +93,7 @@ func (s *Service) Context() context.Context { return s.ctx }
 
 // ----- Clipboard ingestion (called from main, NOT from JS) -----
 
-// IngestText is invoked by the main loop whenever the X11 watcher
+// IngestText is invoked by the main loop whenever the clipboard watcher
 // reports a new text payload. It stores the item, enforces the
 // max-items cap, and publishes a refresh event to the UI.
 func (s *Service) IngestText(text, hash string) error {
@@ -194,7 +192,7 @@ func (s *Service) ListItems(filter string, limit int) ([]clipboard.Item, error) 
 	return items, nil
 }
 
-// writeToClipboard puts a stored item onto the X11 CLIPBOARD selection,
+// writeToClipboard puts a stored item onto the Windows clipboard,
 // suppressing the watcher so our own write isn't re-ingested as a new entry.
 // It recovers from any panic in the platform clipboard code so a bad stored
 // blob returns an error to the UI instead of taking the whole app down.
@@ -233,10 +231,9 @@ func (s *Service) CopyItem(id int64) error {
 	return s.writeToClipboard(id)
 }
 
-// PasteItem writes the stored item back onto the X11 CLIPBOARD selection,
-// hides the popup, and (if enabled) auto-pastes into the focused window so
-// the user doesn't even need to press Ctrl+V. This is the row-click / Enter
-// "use this item" action.
+// PasteItem writes the stored item back onto the clipboard, hides the popup,
+// and (if enabled) auto-pastes into the focused window so the user doesn't even
+// need to press Ctrl+V. This is the row-click / Enter "use this item" action.
 func (s *Service) PasteItem(id int64) error {
 	if err := s.writeToClipboard(id); err != nil {
 		return err
@@ -245,17 +242,11 @@ func (s *Service) PasteItem(id int64) error {
 
 	// Auto-paste: after the popup hides and focus returns to the user's
 	// previous window, synthesise Ctrl+V so the value drops straight into the
-	// field they were editing. Done asynchronously with a delay to let
-	// the window manager hand focus back and clipboard ownership settle.
-	// Windows needs a longer delay (500ms) than Linux (150ms) for focus restoration.
+	// field they were editing. Done asynchronously with a 500ms delay to let
+	// Windows hand focus back to the previous window and clipboard ownership settle.
 	if s.CurrentSettings().AutoPaste {
 		go func() {
-			delay := 150 * time.Millisecond
-			// Increase delay on Windows to ensure previous window regains focus
-			if runtime.GOOS == "windows" {
-				delay = 500 * time.Millisecond
-			}
-			time.Sleep(delay)
+			time.Sleep(500 * time.Millisecond)
 			if err := clipboard.SendPaste(); err != nil {
 				log.Printf("auto-paste: %v", err)
 			}
@@ -895,11 +886,11 @@ func (s *Service) TogglePopup() {
 func (s *Service) IsVisible() bool { return s.visible.Load() }
 
 // SystemInfo returns a small map of host facts used by the UI for
-// session-aware messaging (e.g. "you're on Wayland — hotkey disabled").
+// session-aware messaging. This is a Windows-only build.
 func (s *Service) SystemInfo() map[string]string {
 	return map[string]string{
-		"sessionType": os.Getenv("XDG_SESSION_TYPE"),
-		"desktop":     os.Getenv("XDG_CURRENT_DESKTOP"),
+		"sessionType": "windows",
+		"desktop":     "windows",
 	}
 }
 

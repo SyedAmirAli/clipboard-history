@@ -36,7 +36,7 @@ A lightweight, native clipboard manager for **Windows** inspired by the Windows 
 
 ## Usage
 
-Open the popup with the global **`Super + V`** hotkey, or from the command line:
+Open the popup with the global **`Win + V`** hotkey, or from the command line:
 
 ```bash
 clipd start      # start the daemon (idempotent)
@@ -46,8 +46,8 @@ clipd help       # full command list
 ```
 
 Type to search, use the All/Text/Images/Pinned chips to filter, and press
-`Enter` (or click a row) to paste an item back. See **[USAGE.md](USAGE.md)** for
-the complete reference, settings, keyboard shortcuts, and platform notes.
+`Enter` (or click a row) to paste an item back. See **[WINDOWS.md](WINDOWS.md)**
+for the complete reference, settings, keyboard shortcuts, and troubleshooting.
 
 ## Keyboard Shortcuts
 

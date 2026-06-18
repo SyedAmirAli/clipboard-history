@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>clipd — clipboard history with a memory · Windows &amp; Linux</title>
+  <meta name="description" content="clipd is a fast, native, open-source clipboard history manager for Windows and Linux. Text &amp; image history, global hotkey, search, pinning, encrypted vault, dark/light themes." />
+  <meta name="author" content="Syed Amir Ali" />
+  <meta property="og:title" content="clipd — your clipboard, with a memory" />
+  <meta property="og:description" content="Fast, native, open-source clipboard history for Windows &amp; Linux." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="assets/og/clipd-social-card.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0b0b12" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c3aed'/%3E%3Crect x='8.5' y='7' width='15' height='18' rx='3' fill='none' stroke='white' stroke-width='2.2'/%3E%3Crect x='12' y='4.5' width='8' height='5' rx='2' fill='white'/%3E%3C/svg%3E" />
+
+  <!-- Anti-flash theme (must run before paint) -->
+  <script>
+    (function () {
+      try {
+        var s = localStorage.getItem('theme');
+        var d = s ? s === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', d);
+      } catch (e) {}
+    })();
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+
+  <!-- Tailwind v4 (REQUIRED CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Tailwind v4 config: class-based dark + fonts + accent -->
+  <style type="text/tailwindcss">
+    @custom-variant dark (&:where(.dark, .dark *));
+    @theme {
+      --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+      --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      --color-brand-400: #a78bfa;
+      --color-brand-500: #7c3aed;
+      --color-brand-600: #6d28d9;
+      --color-brand-700: #5b21b6;
+      --color-ink: #0b0b12;
+    }
+  </style>
+
+  <style>
+    /* ---- the clipd vernacular: keystroke chips ---- */
+    kbd.key {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      padding: 0.32em 0.5em;
+      border-radius: 0.5rem;
+      border: 1px solid rgb(148 163 184 / .35);
+      border-bottom-width: 2px;
+      background: #fff;
+      color: #334155;
+      box-shadow: 0 1px 0 rgb(15 23 42 / .04);
+    }
+    .dark kbd.key {
+      background: #14141f;
+      border-color: rgb(148 163 184 / .22);
+      color: #cbd5e1;
+      box-shadow: 0 1px 0 rgb(0 0 0 / .4);
+    }
+
+    /* ---- reveal on scroll ---- */
+    .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s cubic-bezier(.2,.7,.2,1), transform .6s cubic-bezier(.2,.7,.2,1); }
+    .reveal.is-visible { opacity: 1; transform: none; }
+
+    /* ---- hero popup summon ---- */
+    @keyframes summon {
+      from { opacity: 0; transform: translateY(10px) scale(.96); filter: blur(6px); }
+      to   { opacity: 1; transform: none; filter: blur(0); }
+    }
+    .summon { animation: summon .7s cubic-bezier(.2,.8,.2,1) both; }
+
+    /* faint caret blink for the wordmark */
+    @keyframes blink { 0%,55% { opacity: 1; } 56%,100% { opacity: 0; } }
+    .caret { animation: blink 1.1s steps(1) infinite; }
+
+    /* popup inner scroll area */
+    .pop-scroll { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / .4) transparent; }
+    .pop-scroll::-webkit-scrollbar { width: 8px; }
+    .pop-scroll::-webkit-scrollbar-thumb { background: rgb(148 163 184 / .35); border-radius: 99px; }
+
+    /* aurora drift */
+    @keyframes drift { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(2%, -3%, 0) scale(1.08); } }
+    .drift { animation: drift 18s ease-in-out infinite; }
+    .drift-slow { animation: drift 26s ease-in-out infinite reverse; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+      .summon, .caret, .drift, .drift-slow { animation: none !important; }
+      html { scroll-behavior: auto; }
+    }
+
+    /* lightbox */
+    .lb-open { overflow: hidden; }
+  </style>
+</head>
+
+<body class="font-sans antialiased bg-[#fafafa] text-slate-900 dark:bg-ink dark:text-slate-100 selection:bg-brand-500/30 selection:text-inherit">
+
+  <!-- skip link -->
+  <a href="#hero" class="sr-only focus:not-sr-only focus:fixed focus:z-[100] focus:top-3 focus:left-3 focus:rounded-lg focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-white">Skip to content</a>
+
+  <!-- ============================ NAV ============================ -->
+  <header class="fixed top-0 inset-x-0 z-50">
+    <nav aria-label="Primary" class="mx-auto max-w-7xl px-4 sm:px-6">
+      <div class="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/75 px-3 py-2.5 backdrop-blur-xl shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+        <!-- wordmark -->
+        <a href="#hero" class="group flex items-center gap-2.5 rounded-xl px-1.5 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+          <span aria-hidden="true" class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-indigo-600 text-white shadow-md shadow-brand-500/30">
+            <svg viewBox="0 0 24 24" class="h-4.5 w-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="12" height="15" rx="2.5"/><path d="M9 5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1"/></svg>
+          </span>
+          <span class="font-display text-lg font-700 tracking-tight">clipd<span class="caret text-brand-500">_</span></span>
+        </a>
+
+        <!-- center links -->
+        <div class="hidden items-center gap-1 md:flex">
+          <a href="#features" class="rounded-lg px-3 py-2 text-sm font-500 text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">Features</a>
+          <a href="#screenshots" class="rounded-lg px-3 py-2 text-sm font-500 text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">Screenshots</a>
+          <a href="#download" class="rounded-lg px-3 py-2 text-sm font-500 text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">Download</a>
+          <a href="#about" class="rounded-lg px-3 py-2 text-sm font-500 text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">About</a>
+        </div>
+
+        <!-- actions -->
+        <div class="flex items-center gap-1.5">
+          <button id="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false" class="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10">
+            <svg class="h-4.5 w-4.5 dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="hidden h-4.5 w-4.5 dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          </button>
+
+          <a href="https://github.com/SyedAmirAli/clipboard-history" target="_blank" rel="noopener" class="hidden items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-600 text-slate-700 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:inline-flex dark:border-white/10 dark:text-slate-200 dark:hover:bg-white/10">
+            <svg class="h-4 w-4 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27 6.18 21l1.64-7.03L2 9.24l7.19-.62L12 2l2.81 6.62 7.19.62-5.82 4.73L17.82 21z"/></svg>
+            Star
+          </a>
+
+          <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v2.0.0/clipd-v2.0.0.exe" class="hidden items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand-500 to-indigo-600 px-3.5 py-2 text-sm font-600 text-white shadow-md shadow-brand-500/25 transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-ink sm:inline-flex">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+            Download
+          </a>
+
+          <button id="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu" class="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-700 md:hidden dark:border-white/10 dark:text-slate-200">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- mobile menu -->
+      <div id="mobile-menu" hidden class="mt-2 rounded-2xl border border-slate-200/70 bg-white/95 p-2 backdrop-blur-xl shadow-lg md:hidden dark:border-white/10 dark:bg-[#0f0f18]/95">
+        <a href="#features" class="block rounded-lg px-3 py-2.5 text-sm font-500 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10">Features</a>
+        <a href="#screenshots" class="block rounded-lg px-3 py-2.5 text-sm font-500 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10">Screenshots</a>
+        <a href="#download" class="block rounded-lg px-3 py-2.5 text-sm font-500 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10">Download</a>
+        <a href="#about" class="block rounded-lg px-3 py-2.5 text-sm font-500 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10">About</a>
+        <div class="my-1.5 h-px bg-slate-200 dark:bg-white/10"></div>
+        <div class="flex gap-2 p-1">
+          <a href="https://github.com/SyedAmirAli/clipboard-history" target="_blank" rel="noopener" class="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-600 dark:border-white/10">⭐ Star</a>
+          <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v2.0.0/clipd-v2.0.0.exe" class="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-brand-500 to-indigo-600 px-3 py-2.5 text-sm font-600 text-white">⬇ Download</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main id="hero">
+    <!-- ============================ HERO ============================ -->
+    <section class="relative overflow-hidden pt-28 pb-16 sm:pt-36 sm:pb-24">
+      <!-- aurora blobs -->
+      <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
+        <div class="drift absolute -top-24 left-1/4 h-[34rem] w-[34rem] rounded-full bg-brand-500/20 blur-[120px] dark:bg-brand-500/25"></div>
+        <div class="drift-slow absolute -top-10 right-0 h-[28rem] w-[28rem] rounded-full bg-indigo-500/20 blur-[120px] dark:bg-indigo-600/25"></div>
+        <div class="absolute bottom-0 left-1/3 h-[22rem] w-[22rem] rounded-full bg-cyan-400/10 blur-[120px] dark:bg-cyan-500/10"></div>
+        <div class="absolute inset-0 bg-[linear-gradient(to_right,rgb(15_23_42/.04)_1px,transparent_1px),linear-gradient(to_bottom,rgb(15_23_42/.04)_1px,transparent_1px)] bg-[size:54px_54px] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_30%,#000_50%,transparent_100%)] dark:bg-[linear-gradient(to_right,rgb(255_255_255/.05)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/.05)_1px,transparent_1px)]"></div>
+      </div>
+
+      <div class="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:gap-8">
+        <!-- copy -->
+        <div class="max-w-xl">
+          <p class="mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/60 px-3 py-1 font-mono text-xs text-slate-600 backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+            <span class="h-1.5 w-1.5 rounded-full bg-brand-500"></span>
+            Native · Windows &amp; Linux · Open source
+          </p>
+
+          <h1 class="font-display text-4xl font-700 leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+            Your clipboard,<br>with a <span class="relative whitespace-nowrap text-brand-600 dark:text-brand-400">memory.<span aria-hidden="true" class="absolute -inset-x-1 -inset-y-0.5 -z-10 rounded-md bg-brand-500/10 dark:bg-brand-500/20"></span></span>
+          </h1>
+
+          <p class="mt-5 text-lg leading-relaxed text-slate-600 dark:text-slate-300">
+            clipd quietly remembers everything you copy — text and images — so you can search it, pin it, paste it, and never lose a snippet again. Lightning-fast, native, and private.
+          </p>
+
+          <div class="mt-8 flex flex-wrap items-center gap-3">
+            <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v2.0.0/clipd-v2.0.0.exe" class="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-indigo-600 px-5 py-3 text-sm font-600 text-white shadow-lg shadow-brand-500/25 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#fafafa] dark:focus-visible:ring-offset-ink">
+              <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+              Download for Windows
+            </a>
+            <a href="https://github.com/SyedAmirAli/clipboard-history" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-600 text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10">
+              <svg class="h-4.5 w-4.5 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27 6.18 21l1.64-7.03L2 9.24l7.19-.62L12 2l2.81 6.62 7.19.62-5.82 4.73L17.82 21z"/></svg>
+              Star on GitHub
+            </a>
+            <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.1.5/clipd_1.1.5_amd64.deb" class="inline-flex items-center gap-1.5 px-1 text-sm font-600 text-slate-500 underline-offset-4 transition hover:text-brand-600 hover:underline dark:text-slate-400 dark:hover:text-brand-400">
+              Linux (.deb) <span aria-hidden="true">→</span>
+            </a>
+          </div>
+
+          <p class="mt-6 font-mono text-xs text-slate-500 dark:text-slate-400">
+            Free &amp; open source · single ~15&nbsp;MB binary · no installer · works offline
+          </p>
+        </div>
+
+        <!-- interactive popup (the signature) -->
+        <div class="relative">
+          <p class="mb-3 hidden items-center gap-2 font-mono text-xs text-slate-500 lg:flex dark:text-slate-400">
+            <span class="inline-flex items-center gap-1">Live demo — press <kbd class="key">↑</kbd><kbd class="key">↓</kbd> to navigate,</span>
+            <kbd class="key">/</kbd> to search
+          </p>
+
+          <div class="summon relative mx-auto max-w-[420px]">
+            <!-- glow behind window -->
+            <div aria-hidden="true" class="absolute -inset-4 -z-10 rounded-[2rem] bg-gradient-to-br from-brand-500/30 to-indigo-600/20 blur-2xl"></div>
+
+            <!-- the clipd window -->
+            <div id="demo" class="overflow-hidden rounded-2xl border border-slate-200 bg-[#f3f4f6] shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 dark:border-white/10 dark:bg-[#0e0e16] dark:shadow-black/60" role="group" aria-label="Interactive clipd preview">
+              <!-- titlebar -->
+              <div class="flex items-center gap-3 border-b border-slate-200 bg-white/60 px-3.5 py-2.5 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                <span class="flex gap-1.5" aria-hidden="true">
+                  <span class="h-3 w-3 rounded-full bg-[#ff5f57]"></span>
+                  <span class="h-3 w-3 rounded-full bg-[#febc2e]"></span>
+                  <span class="h-3 w-3 rounded-full bg-[#28c840]"></span>
+                </span>
+                <div class="flex flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-white/10 dark:bg-white/5">
+                  <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                  <input id="demo-search" type="text" placeholder="Search clipboard history…" aria-label="Search clipboard history" class="w-full bg-transparent text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none dark:text-slate-200" />
+                </div>
+                <span class="grid h-7 w-7 place-items-center rounded-lg border border-rose-400/40 text-rose-500" aria-hidden="true">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                </span>
+              </div>
+
+              <!-- filter pills -->
+              <div class="flex gap-1.5 px-3 py-2.5" role="tablist" aria-label="Filter clips">
+                <button data-filter="all" class="filter-pill rounded-lg bg-brand-500/15 px-2.5 py-1 font-mono text-[11px] font-600 text-brand-700 dark:text-brand-400" aria-selected="true">All</button>
+                <button data-filter="text" class="filter-pill rounded-lg border border-slate-200 px-2.5 py-1 font-mono text-[11px] text-slate-500 dark:border-white/10 dark:text-slate-400" aria-selected="false">Text</button>
+                <button data-filter="image" class="filter-pill rounded-lg border border-slate-200 px-2.5 py-1 font-mono text-[11px] text-slate-500 dark:border-white/10 dark:text-slate-400" aria-selected="false">Images</button>
+                <button data-filter="pinned" class="filter-pill rounded-lg border border-slate-200 px-2.5 py-1 font-mono text-[11px] text-slate-500 dark:border-white/10 dark:text-slate-400" aria-selected="false">Pinned</button>
+              </div>
+
+              <!-- list -->
+              <div id="demo-list" class="pop-scroll h-[340px] overflow-y-auto px-2 pb-2">
+                <p class="px-2 pt-1 pb-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-400" data-group="pinned">Pinned</p>
+                <!-- rows injected/marked below -->
+                <button class="demo-row" data-type="pinned text" data-content='&lt;script src="https://cdn.jsdelivr.net/npm/@tail…'>
+                  <span class="row-icon">&lt;/&gt;</span>
+                  <span class="row-body"><span class="row-text">&lt;script src="https://cdn.jsdelivr.net/npm/@tail…</span><span class="row-meta">5m ago · pinned</span></span>
+                </button>
+                <button class="demo-row" data-type="pinned text" data-content="# Translation Assistant Skill ## Role You are a t…">
+                  <span class="row-icon">#</span>
+                  <span class="row-body"><span class="row-text"># Translation Assistant Skill ## Role You are a t…</span><span class="row-meta">58m ago · pinned</span></span>
+                </button>
+
+                <p class="px-2 pt-3 pb-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-400" data-group="recent">Recent</p>
+                <button class="demo-row" data-type="text" data-content="https://www.linkedin.com/in/syedamirali473/">
+                  <span class="row-icon">↗</span>
+                  <span class="row-body"><span class="row-text">https://www.linkedin.com/in/syedamirali473/</span><span class="row-meta">just now</span></span>
+                </button>
+                <button class="demo-row" data-type="image" data-content="Image 520×620">
+                  <span class="row-icon">▦</span>
+                  <span class="row-body"><span class="row-text">Image 520×620</span><span class="row-meta">520×620 · 12s ago</span></span>
+                </button>
+                <button class="demo-row" data-type="text" data-content="https://portfolio.syedamirali.me/">
+                  <span class="row-icon">↗</span>
+                  <span class="row-body"><span class="row-text">https://portfolio.syedamirali.me/</span><span class="row-meta">45s ago</span></span>
+                </button>
+                <button class="demo-row" data-type="text" data-content="git commit -m &quot;feat: encrypted vault&quot;">
+                  <span class="row-icon">$</span>
+                  <span class="row-body"><span class="row-text">git commit -m "feat: encrypted vault"</span><span class="row-meta">1m ago</span></span>
+                </button>
+                <button class="demo-row" data-type="image" data-content="Screenshot 2026-06-19">
+                  <span class="row-icon">▦</span>
+                  <span class="row-body"><span class="row-text">Screenshot 2026-06-19 at 04.52</span><span class="row-meta">1440×900 · 2m ago</span></span>
+                </button>
+                <button class="demo-row" data-type="text" data-content="rgba(124, 58, 237, 0.15)">
+                  <span class="row-icon">#</span>
+                  <span class="row-body"><span class="row-text">rgba(124, 58, 237, 0.15)</span><span class="row-meta">3m ago</span></span>
+                </button>
+                <button class="demo-row" data-type="text" data-content="/home/syed/Desktop/clipd/web/">
+                  <span class="row-icon">/</span>
+                  <span class="row-body"><span class="row-text">/home/syed/Desktop/clipd/web/</span><span class="row-meta">6m ago</span></span>
+                </button>
+                <p id="demo-empty" hidden class="px-3 py-10 text-center font-mono text-xs text-slate-400">No clips match that search.</p>
+              </div>
+
+              <!-- footer hint line (real app vernacular) -->
+              <div class="flex items-center justify-between border-t border-slate-200 px-3.5 py-2 font-mono text-[10px] text-slate-400 dark:border-white/[0.06]">
+                <span id="demo-count">12 items · 2 pinned</span>
+                <span class="hidden sm:inline">↑↓ navigate · Enter paste · / search · Esc close</span>
+              </div>
+              <div class="flex items-center justify-center gap-1.5 border-t border-slate-200 py-1.5 font-mono text-[10px] text-slate-400 dark:border-white/[0.06]">
+                Crafted by <span class="font-600 text-slate-600 dark:text-slate-300">Syed Amir Ali</span> · <span class="text-amber-500">★ Star on GitHub</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- toast -->
+          <div id="demo-toast" class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 translate-y-2 rounded-lg bg-slate-900 px-3 py-1.5 font-mono text-xs text-white opacity-0 shadow-lg transition dark:bg-white dark:text-slate-900">Pasted ✓</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ STAR BANNER ============================ -->
+    <section aria-label="Support the project" class="mx-auto max-w-7xl px-4 sm:px-6">
+      <div class="reveal flex flex-col items-center justify-between gap-4 overflow-hidden rounded-2xl border border-brand-500/20 bg-gradient-to-r from-brand-500/10 via-indigo-500/5 to-cyan-500/10 px-5 py-5 sm:flex-row dark:border-brand-500/25">
+        <div class="flex items-center gap-3 text-center sm:text-left">
+          <span aria-hidden="true" class="hidden h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-400/15 text-2xl sm:grid">⭐</span>
+          <p class="text-sm text-slate-700 dark:text-slate-200">
+            <span class="font-600">If clipd saves you time, please star the repo.</span>
+            It’s free, it’s honest, and it genuinely helps the project grow.
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-3">
+          <img src="https://img.shields.io/github/stars/SyedAmirAli/clipboard-history?style=social" alt="GitHub star count for clipd" loading="lazy" decoding="async" class="h-5" />
+          <a href="https://github.com/SyedAmirAli/clipboard-history" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-600 text-white transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-white dark:text-slate-900">
+            <svg class="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27 6.18 21l1.64-7.03L2 9.24l7.19-.62L12 2l2.81 6.62 7.19.62-5.82 4.73L17.82 21z"/></svg>
+            Star on GitHub
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ FEATURES ============================ -->
+    <section id="features" class="scroll-mt-24 mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28">
+      <div class="reveal mx-auto max-w-2xl text-center">
+        <p class="mb-3 font-mono text-xs uppercase tracking-widest text-brand-600 dark:text-brand-400">// what it does</p>
+        <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Everything your clipboard forgets, clipd keeps.</h2>
+        <p class="mt-4 text-slate-600 dark:text-slate-300">Nine things it does well — nothing it doesn’t need to.</p>
+      </div>
+
+      <div class="reveal mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <!-- card -->
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M7 13h6"/></svg></div>
+          <h3 class="font-display text-lg font-600">Text &amp; image history</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Every copy is saved with thumbnails — scroll back through your whole clipboard, text and images alike.</p>
+        </article>
+
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+          <h3 class="font-display text-lg font-600">Instant search &amp; filters</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Live search as you type, with <span class="font-mono text-xs text-slate-500 dark:text-slate-400">All / Text / Images / Pinned</span> filters.</p>
+        </article>
+
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 flex items-center gap-1.5"><kbd class="key">Win</kbd><span class="text-slate-400">+</span><kbd class="key">J</kbd></div>
+          <h3 class="font-display text-lg font-600">Global hotkey</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Summons the popup <span class="font-600">at your cursor</span>, on the right monitor, instantly — from any app.</p>
+        </article>
+
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 17v5M9 10.8 12 3l3 7.8a4.5 4.5 0 1 1-6 0z"/></svg></div>
+          <h3 class="font-display text-lg font-600">Pin what matters</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Pin snippets you reuse so they never get evicted from history, no matter how much you copy.</p>
+        </article>
+
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.4"/></svg></div>
+          <h3 class="font-display text-lg font-600">Private Vault</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">PIN- or password-protected, encrypted storage for tokens, keys, and anything sensitive.</p>
+        </article>
+
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div>
+          <h3 class="font-display text-lg font-600">Save to file &amp; export ZIP</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Save any item into <span class="font-mono text-xs">text/</span> &amp; <span class="font-mono text-xs">images/</span> folders, or export your whole history to a ZIP.</p>
+        </article>
+
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <h3 class="font-display text-lg font-600">System tray + taskbar</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Lives in the tray with a full menu, an optional taskbar button, and auto-start on login.</p>
+        </article>
+
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 9 9c-5 0-9-4-9-9z"/></svg></div>
+          <h3 class="font-display text-lg font-600">Light · Dark · Auto</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">A beautiful frameless UI that matches your system theme — or pin it to whichever you prefer.</p>
+        </article>
+
+        <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
+          <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-9 12h7l-2 8 9-12h-7z"/></svg></div>
+          <h3 class="font-display text-lg font-600">Native &amp; fast</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Built on the native Win32 clipboard API — no heavy deps, reliable image and screenshot capture.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============================ SCREENSHOTS ============================ -->
+    <section id="screenshots" class="scroll-mt-24 mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28">
+      <div class="reveal flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
+        <div class="max-w-xl">
+          <p class="mb-3 font-mono text-xs uppercase tracking-widest text-brand-600 dark:text-brand-400">// the real thing</p>
+          <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Screenshots, both ways.</h2>
+          <p class="mt-4 text-slate-600 dark:text-slate-300">Real shots from the app. Flip between light and dark — it defaults to your current theme.</p>
+        </div>
+        <!-- light/dark toggle -->
+        <div class="inline-flex shrink-0 items-center rounded-xl border border-slate-200 bg-white p-1 dark:border-white/10 dark:bg-white/5" role="tablist" aria-label="Screenshot theme">
+          <button id="shots-light" role="tab" class="rounded-lg px-4 py-1.5 text-sm font-600 transition" aria-selected="false">Light</button>
+          <button id="shots-dark" role="tab" class="rounded-lg px-4 py-1.5 text-sm font-600 transition" aria-selected="true">Dark</button>
+        </div>
+      </div>
+
+      <div id="gallery" class="reveal mt-12 columns-1 gap-4 sm:columns-2 lg:columns-3 [&>*]:mb-4"></div>
+    </section>
+
+    <!-- ============================ HOW IT WORKS ============================ -->
+    <section class="relative overflow-hidden border-y border-slate-200 bg-white py-20 sm:py-28 dark:border-white/10 dark:bg-white/[0.02]">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6">
+        <div class="reveal mx-auto max-w-2xl text-center">
+          <p class="mb-3 font-mono text-xs uppercase tracking-widest text-brand-600 dark:text-brand-400">// three keystrokes from done</p>
+          <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Up and running in under a minute.</h2>
+        </div>
+
+        <ol class="reveal mt-14 grid gap-4 md:grid-cols-3">
+          <li class="relative rounded-2xl border border-slate-200 bg-[#fafafa] p-6 dark:border-white/10 dark:bg-white/[0.03]">
+            <span class="font-mono text-xs text-slate-400">step 01</span>
+            <h3 class="mt-2 font-display text-lg font-600">Download</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Grab the single <span class="font-mono text-xs">.exe</span> (Windows) or <span class="font-mono text-xs">.deb</span> (Linux). One file, ~15 MB.</p>
+          </li>
+          <li class="relative rounded-2xl border border-slate-200 bg-[#fafafa] p-6 dark:border-white/10 dark:bg-white/[0.03]">
+            <span class="font-mono text-xs text-slate-400">step 02</span>
+            <h3 class="mt-2 font-display text-lg font-600">Run it</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">No install, no admin. It starts quietly in your system tray and begins remembering.</p>
+          </li>
+          <li class="relative rounded-2xl border border-slate-200 bg-[#fafafa] p-6 dark:border-white/10 dark:bg-white/[0.03]">
+            <span class="font-mono text-xs text-slate-400">step 03</span>
+            <h3 class="mt-2 font-display text-lg font-600">Press <kbd class="key">Win</kbd> <span class="text-slate-400">+</span> <kbd class="key">J</kbd></h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Open your history anywhere. Type to search, <kbd class="key">Enter</kbd> to paste. That’s it.</p>
+          </li>
+        </ol>
+
+        <!-- CLI -->
+        <div class="reveal mx-auto mt-8 max-w-2xl">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-[#0e0e16] px-4 py-3 dark:border-white/10">
+            <code class="overflow-x-auto font-mono text-sm text-slate-200"><span class="text-brand-400">clipd</span> toggle <span class="text-slate-500"># show/hide the popup · clipd quit to exit</span></code>
+            <button id="copy-cli" type="button" class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 font-mono text-xs text-slate-200 transition hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" aria-label="Copy command to clipboard">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              <span id="copy-cli-label">Copy</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ DOWNLOAD ============================ -->
+    <section id="download" class="scroll-mt-24 mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28">
+      <div class="reveal mx-auto max-w-2xl text-center">
+        <p class="mb-3 font-mono text-xs uppercase tracking-widest text-brand-600 dark:text-brand-400">// get clipd</p>
+        <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Pick your build. No installer, no fuss.</h2>
+      </div>
+
+      <div class="reveal mt-12 grid gap-5 md:grid-cols-2">
+        <!-- windows -->
+        <article class="relative flex flex-col overflow-hidden rounded-2xl border border-brand-500/30 bg-white p-7 shadow-lg shadow-brand-500/5 dark:bg-white/[0.03]">
+          <div aria-hidden="true" class="absolute right-0 top-0 h-32 w-32 rounded-full bg-brand-500/15 blur-3xl"></div>
+          <div class="flex items-center gap-3">
+            <span class="grid h-12 w-12 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400" aria-hidden="true"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.5 4.4v7.1H3zM10.5 12.5v7.1L3 18.5v-6zM11.6 4.2 21 3v8.5h-9.4zM21 12.5V21l-9.4-1.3v-7.2z"/></svg></span>
+            <div>
+              <h3 class="font-display text-xl font-700">Windows</h3>
+              <p class="font-mono text-xs text-slate-500 dark:text-slate-400">10 / 11 · x64</p>
+            </div>
+            <span class="ml-auto rounded-full bg-brand-500/10 px-2.5 py-1 font-mono text-[11px] font-600 text-brand-700 dark:text-brand-400">v2.0.0</span>
+          </div>
+          <ul class="mt-5 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+            <li class="flex items-center gap-2"><span class="text-brand-500">›</span> <span class="font-mono text-xs">clipd-v2.0.0.exe</span> · ~15 MB</li>
+            <li class="flex items-center gap-2"><span class="text-brand-500">›</span> Portable — no installer, no admin</li>
+            <li class="flex items-center gap-2"><span class="text-brand-500">›</span> Double-click and it’s in your tray</li>
+          </ul>
+          <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v2.0.0/clipd-v2.0.0.exe" class="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-indigo-600 px-5 py-3 text-sm font-600 text-white shadow-md shadow-brand-500/25 transition hover:-translate-y-0.5 hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-ink">
+            <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+            Download for Windows
+          </a>
+        </article>
+
+        <!-- linux -->
+        <article class="relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-7 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
+          <div class="flex items-center gap-3">
+            <span class="grid h-12 w-12 place-items-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400" aria-hidden="true"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3.5c-1.2 1.5-1 4-.5 6-1 2-3 4.5-3 7 0 2 1.5 3 3 3 .5 1 1.8 1 3 1s2.5 0 3-1c1.5 0 3-1 3-3 0-2.5-2-5-3-7 .5-2 .7-4.5-.5-6-.8-1-3.7-1-4.5 0z"/><circle cx="10.3" cy="8" r=".6" fill="currentColor"/><circle cx="13.7" cy="8" r=".6" fill="currentColor"/></svg></span>
+            <div>
+              <h3 class="font-display text-xl font-700">Linux</h3>
+              <p class="font-mono text-xs text-slate-500 dark:text-slate-400">Ubuntu / Mint · amd64</p>
+            </div>
+            <span class="ml-auto rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-600 text-slate-600 dark:bg-white/10 dark:text-slate-300">v1.1.5</span>
+          </div>
+          <ul class="mt-5 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> <span class="font-mono text-xs">clipd_1.1.5_amd64.deb</span></li>
+            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> Install: <span class="font-mono text-xs">sudo apt install ./clipd_1.1.5_amd64.deb</span></li>
+            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> Cross-platform <span class="font-mono text-xs">master</span> branch</li>
+          </ul>
+          <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.1.5/clipd_1.1.5_amd64.deb" class="mt-6 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-600 text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10">
+            <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
+            Download .deb
+          </a>
+        </article>
+      </div>
+
+      <p class="reveal mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
+        Looking for older versions or checksums?
+        <a href="https://github.com/SyedAmirAli/clipboard-history/releases" target="_blank" rel="noopener" class="font-600 text-brand-600 underline-offset-4 hover:underline dark:text-brand-400">See all releases on GitHub →</a>
+      </p>
+    </section>
+
+    <!-- ============================ BUILT WITH ============================ -->
+    <section class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 sm:pb-28">
+      <div class="reveal rounded-3xl border border-slate-200 bg-white p-8 sm:p-10 dark:border-white/10 dark:bg-white/[0.03]">
+        <div class="grid gap-8 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+          <div>
+            <p class="mb-3 font-mono text-xs uppercase tracking-widest text-brand-600 dark:text-brand-400">// open source, honest stack</p>
+            <h2 class="font-display text-2xl font-700 tracking-tight sm:text-3xl">Built lean, shipped as one binary.</h2>
+            <p class="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              clipd is a single ~15 MB native binary — no Electron, no background bloat. The repo splits builds by branch:
+              <span class="font-mono text-xs">windows</span> for the native Windows build, <span class="font-mono text-xs">master</span> for Linux / cross-platform.
+            </p>
+            <a href="https://github.com/SyedAmirAli/clipboard-history" target="_blank" rel="noopener" class="mt-6 inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:hover:bg-white/10">
+              <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z"/></svg>
+              View the source
+            </a>
+          </div>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2">
+            <div class="rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-3 dark:border-white/10 dark:bg-white/[0.02]"><p class="font-display font-600">Go</p><p class="font-mono text-xs text-slate-500 dark:text-slate-400">core engine</p></div>
+            <div class="rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-3 dark:border-white/10 dark:bg-white/[0.02]"><p class="font-display font-600">Wails v2</p><p class="font-mono text-xs text-slate-500 dark:text-slate-400">native shell</p></div>
+            <div class="rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-3 dark:border-white/10 dark:bg-white/[0.02]"><p class="font-display font-600">TypeScript</p><p class="font-mono text-xs text-slate-500 dark:text-slate-400">the UI</p></div>
+            <div class="rounded-xl border border-slate-200 bg-[#fafafa] px-4 py-3 dark:border-white/10 dark:bg-white/[0.02]"><p class="font-display font-600">pure-Go SQLite</p><p class="font-mono text-xs text-slate-500 dark:text-slate-400">local storage</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ ABOUT ============================ -->
+    <section id="about" class="scroll-mt-24 mx-auto max-w-7xl px-4 pb-20 sm:px-6 sm:pb-28">
+      <div class="reveal mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-brand-500/[0.04] p-8 text-center sm:p-12 dark:border-white/10 dark:from-white/[0.04] dark:to-brand-500/[0.06]">
+        <span aria-hidden="true" class="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 font-display text-2xl font-700 text-white shadow-lg shadow-brand-500/30">SA</span>
+        <h2 class="mt-5 font-display text-2xl font-700 tracking-tight">Syed Amir Ali</h2>
+        <p class="mx-auto mt-4 max-w-xl text-slate-600 dark:text-slate-300">
+          Full-stack developer. I build fast, native, thoughtful tools — clipd is one of them. If it helps you, a ⭐ on GitHub means a lot.
+        </p>
+        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <a href="https://portfolio.syedamirali.me" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:hover:bg-white/10">Portfolio</a>
+          <a href="https://www.linkedin.com/in/syedamirali473" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:hover:bg-white/10">LinkedIn</a>
+          <a href="mailto:syedamirali473@gmail.com" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:hover:bg-white/10">Email</a>
+          <a href="tel:+88017807594" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:hover:bg-white/10">Phone</a>
+          <a href="https://github.com/SyedAmirAli/clipboard-history" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-indigo-600 px-4 py-2.5 text-sm font-600 text-white shadow-md shadow-brand-500/25 transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-ink">
+            <svg class="h-4 w-4 text-amber-300" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27 6.18 21l1.64-7.03L2 9.24l7.19-.62L12 2l2.81 6.62 7.19.62-5.82 4.73L17.82 21z"/></svg>
+            Follow &amp; star
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================ FOOTER ============================ -->
+  <footer class="border-t border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+    <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+      <div class="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
+        <div class="max-w-sm">
+          <div class="flex items-center gap-2.5">
+            <span aria-hidden="true" class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-indigo-600 text-white"><svg viewBox="0 0 24 24" class="h-4.5 w-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="12" height="15" rx="2.5"/><path d="M9 5V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1"/></svg></span>
+            <span class="font-display text-lg font-700 tracking-tight">clipd</span>
+          </div>
+          <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">A fast, native, open-source clipboard history manager for Windows &amp; Linux. Built with clipd in mind.</p>
+          <a href="https://github.com/SyedAmirAli/clipboard-history" target="_blank" rel="noopener" class="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-600 text-white transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-white dark:text-slate-900">
+            <svg class="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27 6.18 21l1.64-7.03L2 9.24l7.19-.62L12 2l2.81 6.62 7.19.62-5.82 4.73L17.82 21z"/></svg>
+            Star on GitHub
+          </a>
+        </div>
+
+        <div class="grid grid-cols-2 gap-8 sm:grid-cols-3">
+          <div>
+            <h3 class="font-mono text-xs uppercase tracking-widest text-slate-400">Product</h3>
+            <ul class="mt-3 space-y-2 text-sm">
+              <li><a href="#features" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Features</a></li>
+              <li><a href="#screenshots" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Screenshots</a></li>
+              <li><a href="#download" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Download</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-mono text-xs uppercase tracking-widest text-slate-400">Get it</h3>
+            <ul class="mt-3 space-y-2 text-sm">
+              <li><a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v2.0.0/clipd-v2.0.0.exe" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Windows .exe</a></li>
+              <li><a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.1.5/clipd_1.1.5_amd64.deb" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Linux .deb</a></li>
+              <li><a href="https://github.com/SyedAmirAli/clipboard-history/releases" target="_blank" rel="noopener" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">All releases</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-mono text-xs uppercase tracking-widest text-slate-400">Contact</h3>
+            <ul class="mt-3 space-y-2 text-sm">
+              <li><a href="https://portfolio.syedamirali.me" target="_blank" rel="noopener" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Portfolio</a></li>
+              <li><a href="https://www.linkedin.com/in/syedamirali473" target="_blank" rel="noopener" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">LinkedIn</a></li>
+              <li><a href="mailto:syedamirali473@gmail.com" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Email</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-10 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-6 text-sm text-slate-500 sm:flex-row dark:border-white/10 dark:text-slate-400">
+        <p>© 2026 Syed Amir Ali</p>
+        <p class="font-mono text-xs">clipd · v2.0.0 (Win) · v1.1.5 (Linux)</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================ LIGHTBOX ============================ -->
+  <div id="lightbox" hidden class="fixed inset-0 z-[80] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Screenshot viewer">
+    <button id="lightbox-close" type="button" aria-label="Close" class="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <img id="lightbox-img" src="" alt="" class="max-h-[88vh] max-w-full rounded-xl shadow-2xl" />
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+      var root = document.documentElement;
+      var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      /* -------- theme toggle -------- */
+      var themeToggle = document.getElementById('theme-toggle');
+      var themeMeta = document.querySelector('meta[name="theme-color"]:not([media*="dark"])');
+      function syncTheme() {
+        var isDark = root.classList.contains('dark');
+        themeToggle.setAttribute('aria-pressed', String(isDark));
+      }
+      syncTheme();
+      themeToggle.addEventListener('click', function () {
+        var isDark = root.classList.toggle('dark');
+        try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) {}
+        syncTheme();
+        setGallery(isDark ? 'dark' : 'light');
+      });
+
+      /* -------- mobile nav -------- */
+      var navToggle = document.getElementById('nav-toggle');
+      var menu = document.getElementById('mobile-menu');
+      navToggle.addEventListener('click', function () {
+        var open = menu.hasAttribute('hidden');
+        if (open) { menu.removeAttribute('hidden'); } else { menu.setAttribute('hidden', ''); }
+        navToggle.setAttribute('aria-expanded', String(open));
+        navToggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+      });
+      menu.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', function () {
+          menu.setAttribute('hidden', '');
+          navToggle.setAttribute('aria-expanded', 'false');
+        });
+      });
+
+      /* -------- copy CLI -------- */
+      var copyBtn = document.getElementById('copy-cli');
+      var copyLabel = document.getElementById('copy-cli-label');
+      copyBtn.addEventListener('click', function () {
+        var text = 'clipd toggle';
+        var done = function () { copyLabel.textContent = 'Copied!'; setTimeout(function () { copyLabel.textContent = 'Copy'; }, 1600); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function(){ fallback(text); done(); });
+        } else { fallback(text); done(); }
+      });
+      function fallback(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+
+      /* -------- reveal on scroll -------- */
+      var reveals = document.querySelectorAll('.reveal');
+      if (reduceMotion || !('IntersectionObserver' in window)) {
+        reveals.forEach(function (el) { el.classList.add('is-visible'); });
+      } else {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) { e.target.classList.add('is-visible'); io.unobserve(e.target); }
+          });
+        }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+        reveals.forEach(function (el) { io.observe(el); });
+      }
+
+      /* -------- screenshots gallery -------- */
+      var darkShots = [
+        ['dark-1.png', 'clipd history list with pinned and recent clips — dark theme'],
+        ['dark-3.png', 'clipd filtered to image clips with thumbnails — dark theme'],
+        ['dark-5.png', 'clipd Private Vault with authenticator QR setup — dark theme'],
+        ['dark-2.png', 'clipd history list browsing recent text clips — dark theme'],
+        ['dark-6.png', 'clipd hovering a clip with pin, copy, save actions — dark theme'],
+        ['dark-7.png', 'clipd search filtering the clipboard history — dark theme'],
+        ['dark-8.png', 'clipd settings panel with hotkey and behaviour options — dark theme'],
+        ['dark-4.png', 'clipd showing pinned snippets — dark theme']
+      ];
+      var lightShots = [
+        ['light-1.png', 'clipd settings panel with hotkey, history and theme options — light theme'],
+        ['light-2.png', 'clipd history list with pinned and recent clips — light theme'],
+        ['light-4.png', 'clipd Private Vault unlocked showing a protected item — light theme'],
+        ['light-3.png', 'clipd filtering clips by type — light theme'],
+        ['light-6.png', 'clipd hovering a clip with quick actions — light theme'],
+        ['light-7.png', 'clipd live search across the clipboard history — light theme'],
+        ['light-10.png', 'clipd compact popup near the cursor — light theme'],
+        ['light-5.png', 'clipd image clips with thumbnails — light theme'],
+        ['light-9.png', 'clipd pinned snippets at the top of history — light theme']
+      ];
+      var gallery = document.getElementById('gallery');
+      var lightBtn = document.getElementById('shots-light');
+      var darkBtn = document.getElementById('shots-dark');
+      var activeTab = 'rounded-lg px-4 py-1.5 text-sm font-600 transition bg-brand-500/15 text-brand-700 dark:text-brand-400';
+      var idleTab = 'rounded-lg px-4 py-1.5 text-sm font-600 transition text-slate-500 dark:text-slate-400';
+
+      function setGallery(mode) {
+        var shots = mode === 'light' ? lightShots : darkShots;
+        gallery.innerHTML = '';
+        shots.forEach(function (s) {
+          var fig = document.createElement('figure');
+          fig.className = 'group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03]';
+          var img = document.createElement('img');
+          img.src = 'assets/screenshots/' + s[0];
+          img.alt = s[1];
+          img.loading = 'lazy';
+          img.decoding = 'async';
+          img.className = 'block w-full cursor-zoom-in object-contain';
+          img.addEventListener('click', function () { openLightbox(img.src, img.alt); });
+          fig.appendChild(img);
+          gallery.appendChild(fig);
+        });
+        lightBtn.className = mode === 'light' ? activeTab : idleTab;
+        darkBtn.className = mode === 'dark' ? activeTab : idleTab;
+        lightBtn.setAttribute('aria-selected', String(mode === 'light'));
+        darkBtn.setAttribute('aria-selected', String(mode === 'dark'));
+      }
+      lightBtn.addEventListener('click', function () { setGallery('light'); });
+      darkBtn.addEventListener('click', function () { setGallery('dark'); });
+      setGallery(root.classList.contains('dark') ? 'dark' : 'light');
+
+      /* -------- lightbox -------- */
+      var lb = document.getElementById('lightbox');
+      var lbImg = document.getElementById('lightbox-img');
+      var lbClose = document.getElementById('lightbox-close');
+      var lastFocus = null;
+      function openLightbox(src, alt) {
+        lastFocus = document.activeElement;
+        lbImg.src = src; lbImg.alt = alt;
+        lb.removeAttribute('hidden');
+        document.body.classList.add('lb-open');
+        lbClose.focus();
+      }
+      function closeLightbox() {
+        lb.setAttribute('hidden', '');
+        document.body.classList.remove('lb-open');
+        lbImg.src = '';
+        if (lastFocus) lastFocus.focus();
+      }
+      lbClose.addEventListener('click', closeLightbox);
+      lb.addEventListener('click', function (e) { if (e.target === lb) closeLightbox(); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !lb.hasAttribute('hidden')) closeLightbox();
+      });
+
+      /* -------- interactive demo popup -------- */
+      var demo = document.getElementById('demo');
+      var demoSearch = document.getElementById('demo-search');
+      var demoList = document.getElementById('demo-list');
+      var demoEmpty = document.getElementById('demo-empty');
+      var demoCount = document.getElementById('demo-count');
+      var toast = document.getElementById('demo-toast');
+      var pills = Array.prototype.slice.call(document.querySelectorAll('.filter-pill'));
+      var rows = Array.prototype.slice.call(demoList.querySelectorAll('.demo-row'));
+      var groups = Array.prototype.slice.call(demoList.querySelectorAll('[data-group]'));
+      var currentFilter = 'all';
+      var selected = -1;
+
+      var pillActive = 'filter-pill rounded-lg bg-brand-500/15 px-2.5 py-1 font-mono text-[11px] font-600 text-brand-700 dark:text-brand-400';
+      var pillIdle = 'filter-pill rounded-lg border border-slate-200 px-2.5 py-1 font-mono text-[11px] text-slate-500 dark:border-white/10 dark:text-slate-400';
+
+      function visibleRows() { return rows.filter(function (r) { return !r.hidden; }); }
+
+      function applyFilter() {
+        var q = demoSearch.value.trim().toLowerCase();
+        rows.forEach(function (r) {
+          var type = r.getAttribute('data-type');
+          var content = r.getAttribute('data-content').toLowerCase();
+          var matchFilter = currentFilter === 'all' || type.indexOf(currentFilter) !== -1;
+          var matchSearch = !q || content.indexOf(q) !== -1;
+          r.hidden = !(matchFilter && matchSearch);
+        });
+        // hide group label if it has no visible rows
+        groups.forEach(function (g) {
+          var name = g.getAttribute('data-group');
+          var any = rows.some(function (r) { return !r.hidden && r.getAttribute('data-type').indexOf(name) !== -1; });
+          if (name === 'recent') {
+            any = rows.some(function (r) { return !r.hidden && r.getAttribute('data-type').indexOf('pinned') === -1; });
+          }
+          g.hidden = !any;
+        });
+        var vis = visibleRows();
+        demoEmpty.hidden = vis.length !== 0;
+        var pinned = rows.filter(function (r){ return !r.hidden && r.getAttribute('data-type').indexOf('pinned') !== -1; }).length;
+        demoCount.textContent = vis.length + ' item' + (vis.length === 1 ? '' : 's') + ' · ' + pinned + ' pinned';
+        selected = -1;
+        highlight();
+      }
+
+      function highlight() {
+        var vis = visibleRows();
+        rows.forEach(function (r) { r.removeAttribute('data-selected'); });
+        if (selected >= 0 && selected < vis.length) {
+          vis[selected].setAttribute('data-selected', '');
+          vis[selected].scrollIntoView({ block: 'nearest' });
+        }
+      }
+
+      function paste(row) {
+        toast.textContent = row.getAttribute('data-type').indexOf('image') !== -1 ? 'Image pasted ✓' : 'Pasted ✓';
+        toast.style.opacity = '1';
+        toast.style.transform = 'translate(-50%, 0)';
+        clearTimeout(paste._t);
+        paste._t = setTimeout(function () {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translate(-50%, 8px)';
+        }, 1300);
+      }
+
+      pills.forEach(function (p) {
+        p.addEventListener('click', function () {
+          currentFilter = p.getAttribute('data-filter');
+          pills.forEach(function (x) { x.className = pillIdle; x.setAttribute('aria-selected', 'false'); });
+          p.className = pillActive; p.setAttribute('aria-selected', 'true');
+          applyFilter();
+        });
+      });
+      demoSearch.addEventListener('input', applyFilter);
+      rows.forEach(function (r) {
+        r.addEventListener('click', function () {
+          var vis = visibleRows();
+          selected = vis.indexOf(r); highlight(); paste(r);
+        });
+      });
+
+      // keyboard nav scoped to the demo
+      demo.addEventListener('keydown', function (e) {
+        var vis = visibleRows();
+        if (e.key === 'ArrowDown') { e.preventDefault(); selected = Math.min(selected + 1, vis.length - 1); if (selected < 0) selected = 0; highlight(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); selected = Math.max(selected - 1, 0); highlight(); }
+        else if (e.key === 'Enter') { if (selected >= 0 && vis[selected]) { e.preventDefault(); paste(vis[selected]); } }
+        else if (e.key === '/' && document.activeElement !== demoSearch) { e.preventDefault(); demoSearch.focus(); }
+        else if (e.key === 'Escape') { demoSearch.blur(); selected = -1; highlight(); }
+      });
+      demo.setAttribute('tabindex', '0');
+      applyFilter();
+    })();
+  </script>
+
+  <style>
+    /* demo row styling kept here to stay terse; uses tokens via vars */
+    .demo-row {
+      display: flex; align-items: center; gap: .625rem; width: 100%; text-align: left;
+      padding: .6rem .625rem; border-radius: .75rem; border: 1px solid transparent;
+      transition: background .15s ease, border-color .15s ease, transform .12s ease;
+      cursor: pointer;
+    }
+    .demo-row:hover { background: rgb(124 58 237 / .06); }
+    .dark .demo-row:hover { background: rgb(124 58 237 / .12); }
+    .demo-row[data-selected] {
+      background: rgb(124 58 237 / .12);
+      border-color: rgb(124 58 237 / .45);
+    }
+    .dark .demo-row[data-selected] { background: rgb(124 58 237 / .18); }
+    .demo-row:focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+    .row-icon {
+      flex-shrink: 0; display: grid; place-items: center; width: 1.9rem; height: 1.9rem;
+      border-radius: .5rem; background: rgb(148 163 184 / .15);
+      font-family: var(--font-mono); font-size: .7rem; color: #64748b;
+    }
+    .dark .row-icon { background: rgb(255 255 255 / .06); color: #94a3b8; }
+    .row-body { min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
+    .row-text {
+      font-size: .8rem; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dark .row-text { color: #e2e8f0; }
+    .row-meta { font-family: var(--font-mono); font-size: .65rem; color: #94a3b8; }
+  </style>
+</body>
+</html>

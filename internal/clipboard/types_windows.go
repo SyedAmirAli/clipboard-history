@@ -13,7 +13,8 @@ func DefaultSettings() Settings {
 		Autostart:   false,
 		HideOnBlur:  true,
 		LaunchAtTop: false,
-		WindowFrame: true,
-		AutoPaste:   true,
+		WindowFrame:   true,
+		AutoPaste:     true,
+		ShowInTaskbar: true,
 	}
 }

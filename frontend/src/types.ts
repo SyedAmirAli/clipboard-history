@@ -29,6 +29,7 @@ export interface AppSettings {
   launchAtTop: boolean;
   windowFrame: boolean;
   autoPaste: boolean;
+  showInTaskbar: boolean;
 }
 
 export interface SystemInfo {

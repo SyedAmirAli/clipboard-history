@@ -607,6 +607,7 @@ func (s *Service) GetSettings() (clipboard.Settings, error) {
 	out.LaunchAtTop = get("launch_at_top", boolStr(def.LaunchAtTop)) == "1"
 	out.WindowFrame = get("window_frame", boolStr(def.WindowFrame)) == "1"
 	out.AutoPaste = get("auto_paste", boolStr(def.AutoPaste)) == "1"
+	out.ShowInTaskbar = get("show_in_taskbar", boolStr(def.ShowInTaskbar)) == "1"
 	if s.autostart != nil {
 		if v, err := s.autostart.IsEnabled(); err == nil {
 			out.Autostart = v
@@ -671,6 +672,9 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 	if err := put("auto_paste", boolStr(in.AutoPaste)); err != nil {
 		return prev, err
 	}
+	if err := put("show_in_taskbar", boolStr(in.ShowInTaskbar)); err != nil {
+		return prev, err
+	}
 	if s.hotkeyMgr != nil && in.Hotkey != prev.Hotkey {
 		if err := s.hotkeyMgr.Register(in.Hotkey); err != nil {
 			return prev, fmt.Errorf("re-register hotkey: %w", err)
@@ -682,7 +686,26 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 		}
 	}
 	s.settingsLog.Store(in)
+	// Apply the taskbar-visibility toggle live so the user sees it take effect
+	// without a restart.
+	if in.ShowInTaskbar != prev.ShowInTaskbar {
+		s.applyTaskbarVisibility(in.ShowInTaskbar)
+	}
 	return in, nil
+}
+
+// applyTaskbarVisibility sets the window's taskbar style and, if the window is
+// currently visible, does a quick hide/show so Windows re-registers (or drops)
+// the taskbar button immediately.
+func (s *Service) applyTaskbarVisibility(visible bool) {
+	if s.ctx == nil {
+		return
+	}
+	clipboard.SetTaskbarVisible("clipd", visible)
+	if s.visible.Load() {
+		wailsruntime.WindowHide(s.ctx)
+		wailsruntime.WindowShow(s.ctx)
+	}
 }
 
 func (s *Service) vaultMetadata() (vault.Metadata, error) {
@@ -853,11 +876,12 @@ func (s *Service) ShowPopup() {
 	}
 	// Save the currently focused window so we can restore it before pasting
 	clipboard.SaveFocusedWindow()
-	// Force a real taskbar button before showing, so minimising the (frameless)
-	// window goes to the taskbar instead of leaving a stray placeholder icon on
-	// the desktop. Done while the window is still hidden so the taskbar registers
-	// it on show.
-	clipboard.EnsureTaskbarButton("clipd")
+	// Apply the taskbar-visibility preference before showing (while hidden), so
+	// the taskbar registers the right state on show. When on, the frameless
+	// window gets a real taskbar button (minimises to the taskbar instead of
+	// leaving a stray placeholder icon on the desktop); when off, it's a
+	// taskbar-less popup.
+	clipboard.SetTaskbarVisible("clipd", s.CurrentSettings().ShowInTaskbar)
 	wailsruntime.WindowShow(s.ctx)
 	wailsruntime.WindowUnminimise(s.ctx) // restore if minimised to the taskbar
 	// In windowed mode the user owns the window position and stacking, so we

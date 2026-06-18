@@ -43,9 +43,12 @@ type Settings struct {
 	// (changing it requires a restart).
 	WindowFrame bool `json:"windowFrame"`
 	// AutoPaste, when true, synthesises a Ctrl+V into the previously focused
-	// window after an item is selected, so the value is pasted automatically
-	// (requires xdotool).
+	// window after an item is selected, so the value is pasted automatically.
 	AutoPaste bool `json:"autoPaste"`
+	// ShowInTaskbar, when true, gives the window a normal taskbar button (so it
+	// minimises to the taskbar). When false, the window is a taskbar-less popup.
+	// Applied live.
+	ShowInTaskbar bool `json:"showInTaskbar"`
 }
 
 // DefaultSettings returns platform-specific default settings.

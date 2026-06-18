@@ -180,10 +180,11 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         </div>
 
         <div class="s-section">Behaviour</div>
-        ${switchRow('autostart', s.autostart, 'Auto-start on login', '~/.config/autostart/clipd.desktop')}
+        ${switchRow('autostart', s.autostart, 'Auto-start on login', 'Launch clipd automatically when you sign in to Windows')}
         ${switchRow('hideOnBlur', s.hideOnBlur, 'Hide on focus loss', 'Auto-close popup when clicked away')}
         ${switchRow('launchAtTop', s.launchAtTop, 'Launch at screen top', 'Position the popup near the top of the screen')}
-        ${switchRow('autoPaste', s.autoPaste, 'Auto-paste on select', 'Paste straight into the focused field (sends Ctrl+V via xdotool)')}
+        ${switchRow('autoPaste', s.autoPaste, 'Auto-paste on select', 'Paste straight into the focused field (sends Ctrl+V)')}
+        ${switchRow('showInTaskbar', s.showInTaskbar, 'Show in taskbar', 'Give the window a taskbar button so it minimises to the taskbar. Off: a taskbar-less popup.')}
         ${switchRow('windowFrame', s.windowFrame, 'Taskbar window', 'On: a normal window with a taskbar entry. Off: floating always-on-top popup that hides on focus loss. Restart to apply.')}
 
         ${session}
@@ -304,6 +305,7 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         hideOnBlur: roleOn('hideOnBlur'),
         launchAtTop: roleOn('launchAtTop'),
         autoPaste: roleOn('autoPaste'),
+        showInTaskbar: roleOn('showInTaskbar'),
         windowFrame: roleOn('windowFrame'),
       };
       try {

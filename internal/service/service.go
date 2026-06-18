@@ -121,15 +121,16 @@ func (s *Service) IngestImage(imgBytes []byte, hash string) error {
 		return nil
 	}
 
-	// Skip re-ingesting images we just wrote to clipboard (2-second window)
+	// Skip re-ingesting images we just wrote to clipboard (5-second window)
 	// This prevents infinite loops when pasting causes watcher to re-read the clipboard
 	s.lastImageWriteMu.Lock()
-	if time.Since(s.lastImageWrite) < 2*time.Second {
-		s.lastImageWriteMu.Unlock()
-		log.Printf("IngestImage: Skipping re-ingestion of image we just wrote (within 2s window)")
+	timeSinceWrite := time.Since(s.lastImageWrite)
+	s.lastImageWriteMu.Unlock()
+
+	if timeSinceWrite < 5*time.Second && s.lastImageWrite != (time.Time{}) {
+		log.Printf("IngestImage: Skipping re-ingestion (wrote %v ago)", timeSinceWrite)
 		return nil
 	}
-	s.lastImageWriteMu.Unlock()
 
 	settings := s.CurrentSettings()
 	if !settings.KeepImages {

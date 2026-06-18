@@ -21,8 +21,11 @@ type Callbacks struct {
 	OnQuit     func()
 }
 
-//go:embed icon.png
-var iconPNG []byte
+// Windows' system tray requires ICO-format icon bytes; a PNG fails to load
+// ("unable to set icon"), leaving a blank/default icon.
+//
+//go:embed icon.ico
+var iconICO []byte
 
 // Start installs the tray indicator and wires its menu items to cb.
 // It returns immediately — menu click pumping happens on a goroutine.
@@ -32,7 +35,7 @@ var iconPNG []byte
 // nothing to attach to.
 func Start(cb Callbacks) {
 	systray.Register(func() {
-		systray.SetIcon(iconPNG)
+		systray.SetIcon(iconICO)
 		systray.SetTitle("clipd")
 		systray.SetTooltip("Clipboard History")
 

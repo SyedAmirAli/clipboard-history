@@ -853,6 +853,11 @@ func (s *Service) ShowPopup() {
 	}
 	// Save the currently focused window so we can restore it before pasting
 	clipboard.SaveFocusedWindow()
+	// Force a real taskbar button before showing, so minimising the (frameless)
+	// window goes to the taskbar instead of leaving a stray placeholder icon on
+	// the desktop. Done while the window is still hidden so the taskbar registers
+	// it on show.
+	clipboard.EnsureTaskbarButton("clipd")
 	wailsruntime.WindowShow(s.ctx)
 	wailsruntime.WindowUnminimise(s.ctx) // restore if minimised to the taskbar
 	// In windowed mode the user owns the window position and stacking, so we

@@ -4,8 +4,10 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,8 +38,27 @@ var assets embed.FS
 //go:embed build/appicon.png
 var appIcon []byte
 
+// setupFileLog mirrors all log output to <home>/clipd-debug.log. A production
+// Windows build has no attached console, so this file is the only way to see the
+// clipboard diagnostics and any recovered-panic stack traces. The file is
+// truncated on each launch so it only holds the most recent session.
+func setupFileLog() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	logPath := filepath.Join(home, "clipd-debug.log")
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return
+	}
+	log.SetOutput(io.MultiWriter(os.Stderr, f))
+	log.Printf("clipd debug log started; build includes clipboard image fixes")
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	setupFileLog()
 
 	sockPath, _ := config.SocketPath()
 

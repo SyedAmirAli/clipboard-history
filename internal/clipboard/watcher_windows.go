@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"log"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -31,12 +33,13 @@ var (
 	procGlobalUnlock               = kernel32DLL.NewProc("GlobalUnlock")
 	procOpenClipboard              = user32DLL.NewProc("OpenClipboard")
 	procCloseClipboard             = user32DLL.NewProc("CloseClipboard")
+	procRegisterClipboardFormatW   = user32DLL.NewProc("RegisterClipboardFormatW")
 )
 
 const (
 	cfText        = 1
 	cfDIB         = 8
-	cfPNG         = 49320
+	cfDIBV5       = 17
 	GMEM_MOVEABLE = 0x0002
 
 	// BITMAPINFOHEADER compression modes.
@@ -112,7 +115,14 @@ func (w *Watcher) tick(ctx context.Context) {
 	}
 
 	// Fall back to image.
-	if img, err := readImageWindows(); err == nil && len(img) > 0 {
+	img, err := readImageWindows()
+	if err != nil {
+		// Previously this was silent, so image-read failures looked like "nothing
+		// happened". Log them so a failing screenshot is diagnosable.
+		log.Printf("clipboard: image read failed: %v", err)
+		return
+	}
+	if len(img) > 0 {
 		h := hashBytes(img)
 		if w.swapHash(h) {
 			return
@@ -166,31 +176,76 @@ func readTextWindows() (string, error) {
 	return string(cstr[:length]), nil
 }
 
-// readImageWindows copies the raw DIB bytes out under a short, thread-locked
-// clipboard hold, then decodes/encodes to PNG *after* releasing the clipboard.
-// Keeping the heavy work outside the hold is what prevents the clipboard from
-// being stranded open (which previously killed Ctrl+C app-wide).
+// pngFormatIDs lazily registers the "PNG" and "image/png" clipboard formats that
+// modern apps (Qt/Flameshot, browsers, Office) use, and returns their IDs.
+var (
+	pngFormatOnce sync.Once
+	pngFormatIDs  []uint32
+)
+
+func registerPNGFormats() {
+	for _, name := range []string{"PNG", "image/png"} {
+		if p, err := syscall.UTF16PtrFromString(name); err == nil {
+			if id, _, _ := procRegisterClipboardFormatW.Call(uintptr(unsafe.Pointer(p))); id != 0 {
+				pngFormatIDs = append(pngFormatIDs, uint32(id))
+			}
+		}
+	}
+}
+
+func pngFormats() []uint32 {
+	pngFormatOnce.Do(registerPNGFormats)
+	return pngFormatIDs
+}
+
+// rawImage is one candidate clipboard image payload.
+type rawImage struct {
+	data  []byte
+	isPNG bool   // true: already PNG bytes; false: a packed DIB
+	label string // for diagnostics
+}
+
+// readImageWindows reads whatever image the clipboard holds and returns PNG
+// bytes. It collects every supported format (CF_DIB, CF_DIBV5, registered PNG)
+// while the clipboard is briefly open, then decodes them after release and
+// returns the first that succeeds — so a quirk in one format can't lose an image
+// that another format carries cleanly.
 func readImageWindows() ([]byte, error) {
-	raw, err := readDIBRaw()
+	candidates, err := readClipboardImages()
 	if err != nil {
 		return nil, err
 	}
 
-	img, err := dibToImage(raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert DIB to image: %w", err)
+	var lastErr error
+	for _, c := range candidates {
+		if c.isPNG {
+			if _, _, e := image.Decode(bytes.NewReader(c.data)); e != nil {
+				lastErr = fmt.Errorf("%s decode: %w", c.label, e)
+				continue
+			}
+			return c.data, nil
+		}
+		img, e := dibToImage(c.data)
+		if e != nil {
+			lastErr = fmt.Errorf("%s decode: %w", c.label, e)
+			continue
+		}
+		var pngBuf bytes.Buffer
+		if e := png.Encode(&pngBuf, img); e != nil {
+			lastErr = fmt.Errorf("%s encode: %w", c.label, e)
+			continue
+		}
+		return pngBuf.Bytes(), nil
 	}
-
-	var pngBuf bytes.Buffer
-	if err := png.Encode(&pngBuf, img); err != nil {
-		return nil, fmt.Errorf("failed to encode image as PNG: %w", err)
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no supported image format on clipboard")
 	}
-	return pngBuf.Bytes(), nil
+	return nil, lastErr
 }
 
-// readDIBRaw returns a private copy of the clipboard's CF_DIB bytes. The
-// clipboard is held only for the memcpy.
-func readDIBRaw() ([]byte, error) {
+// readClipboardImages opens the clipboard once (thread-pinned) and copies out the
+// raw bytes of every supported image format present, in priority order.
+func readClipboardImages() ([]rawImage, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -199,35 +254,72 @@ func readDIBRaw() ([]byte, error) {
 	}
 	defer closeClipboard()
 
-	if !isFormatAvailable(cfDIB) {
-		return nil, fmt.Errorf("no image format available")
-	}
+	pngIDs := pngFormats()
+	// One-line diagnostic so a failing screenshot reveals exactly what the source
+	// app put on the clipboard.
+	log.Printf("clipboard: image change; DIB=%v DIBV5=%v PNG=%v",
+		isFormatAvailable(cfDIB), isFormatAvailable(cfDIBV5), anyFormatAvailable(pngIDs))
 
-	handle, _, _ := procGetClipboardData.Call(uintptr(cfDIB))
+	var out []rawImage
+	// Prefer DIB/DIBV5 (lossless); fall back to PNG.
+	if isFormatAvailable(cfDIB) {
+		if b, e := readGlobalFormat(cfDIB); e == nil && len(b) > 0 {
+			out = append(out, rawImage{data: b, isPNG: false, label: "CF_DIB"})
+		}
+	}
+	if isFormatAvailable(cfDIBV5) {
+		if b, e := readGlobalFormat(cfDIBV5); e == nil && len(b) > 0 {
+			out = append(out, rawImage{data: b, isPNG: false, label: "CF_DIBV5"})
+		}
+	}
+	for _, id := range pngIDs {
+		if isFormatAvailable(id) {
+			if b, e := readGlobalFormat(id); e == nil && len(b) > 0 {
+				out = append(out, rawImage{data: b, isPNG: true, label: "PNG"})
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no supported image format on clipboard")
+	}
+	return out, nil
+}
+
+// readGlobalFormat copies the HGLOBAL behind a clipboard format into a private
+// slice. Must be called with the clipboard already open.
+func readGlobalFormat(format uint32) ([]byte, error) {
+	handle, _, _ := procGetClipboardData.Call(uintptr(format))
 	if handle == 0 {
-		return nil, fmt.Errorf("failed to get clipboard image data")
+		return nil, fmt.Errorf("GetClipboardData(%d) returned null", format)
 	}
-
 	lockedPtr, _, _ := procGlobalLock.Call(handle)
 	if lockedPtr == 0 {
-		return nil, fmt.Errorf("failed to lock clipboard image")
+		return nil, fmt.Errorf("GlobalLock failed for format %d", format)
 	}
 	defer procGlobalUnlock.Call(handle)
 
 	size, _, _ := procGlobalSize.Call(handle)
 	if size == 0 {
-		return nil, fmt.Errorf("failed to get clipboard image size")
+		return nil, fmt.Errorf("GlobalSize 0 for format %d", format)
 	}
-
 	const maxImageSize = 100 * 1024 * 1024
 	if size > maxImageSize {
 		return nil, fmt.Errorf("clipboard image too large: %d bytes (max: %d)", size, maxImageSize)
 	}
 
 	src := (*[1 << 30]byte)(unsafe.Pointer(lockedPtr))[:int(size):int(size)]
-	raw := make([]byte, int(size))
-	copy(raw, src)
-	return raw, nil
+	out := make([]byte, int(size))
+	copy(out, src)
+	return out, nil
+}
+
+func anyFormatAvailable(ids []uint32) bool {
+	for _, id := range ids {
+		if isFormatAvailable(id) {
+			return true
+		}
+	}
+	return false
 }
 
 // dibToImage decodes a packed DIB (BITMAPINFOHEADER/V4/V5, 24- or 32-bit,

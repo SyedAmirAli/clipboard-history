@@ -5,4 +5,5 @@ frontend/wailsjs
 dist/
 *.deb
 *.tar.gz
+*.exe
 .DS_Store

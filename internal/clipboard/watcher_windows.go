@@ -8,8 +8,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
-	"image/color"
 	"image/png"
+	"runtime"
 	"syscall"
 	"time"
 	"unsafe"
@@ -19,7 +19,7 @@ var (
 	kernel32DLL = syscall.NewLazyDLL("kernel32.dll")
 	user32DLL   = syscall.NewLazyDLL("user32.dll")
 
-	procGetClipboardOwner          = user32DLL.NewProc("GetClipboardOwner")
+	procGetClipboardSequenceNumber = user32DLL.NewProc("GetClipboardSequenceNumber")
 	procGetClipboardData           = user32DLL.NewProc("GetClipboardData")
 	procGlobalSize                 = kernel32DLL.NewProc("GlobalSize")
 	procIsClipboardFormatAvailable = user32DLL.NewProc("IsClipboardFormatAvailable")
@@ -34,10 +34,15 @@ var (
 )
 
 const (
-	cfText = 1
-	cfDIB  = 8
-	cfPNG  = 49320
+	cfText        = 1
+	cfDIB         = 8
+	cfPNG         = 49320
 	GMEM_MOVEABLE = 0x0002
+
+	// BITMAPINFOHEADER compression modes.
+	biRGB         = 0
+	biBitfields   = 3
+	biAlphaFields = 6
 )
 
 func hashString(s string) string {
@@ -69,29 +74,35 @@ func (w *Watcher) loop(ctx context.Context) {
 	t := time.NewTicker(w.interval)
 	defer t.Stop()
 
-	var lastOwner uintptr
+	// GetClipboardSequenceNumber increments on every clipboard change. It is far
+	// more reliable than polling the owner window (which misses changes when HWNDs
+	// are reused) and needs no clipboard open, so it never contends with Ctrl+C.
+	var lastSeq uintptr
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			// Poll clipboard owner to detect changes
-			if owner, _, _ := procGetClipboardOwner.Call(); owner != lastOwner || owner == 0 {
-				lastOwner = owner
-				w.tick(ctx)
+			seq, _, _ := procGetClipboardSequenceNumber.Call()
+			if seq == lastSeq {
+				continue
 			}
+			lastSeq = seq
+			w.tick(ctx)
 		}
 	}
 }
 
 func (w *Watcher) tick(ctx context.Context) {
-	// Use a short timeout to avoid blocking other clipboard operations (e.g., Ctrl+C)
-	tickCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-	defer cancel()
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 
-	// Try to read text first (most common)
-	text, err := readTextWindows(tickCtx)
-	if err == nil && text != "" {
+	// Try text first (most common). readTextWindows holds the clipboard only
+	// long enough to copy the bytes out, then releases it.
+	if text, err := readTextWindows(); err == nil && text != "" {
 		h := hashString(text)
 		if w.swapHash(h) {
 			return
@@ -100,31 +111,31 @@ func (w *Watcher) tick(ctx context.Context) {
 		return
 	}
 
-	// Fall back to image
-	if img, err := readImageWindows(tickCtx); err == nil && len(img) > 0 {
+	// Fall back to image.
+	if img, err := readImageWindows(); err == nil && len(img) > 0 {
 		h := hashBytes(img)
 		if w.swapHash(h) {
 			return
 		}
 		w.publish(Event{ContentType: ContentTypeImage, ImagePNG: img, Hash: h})
-		return
 	}
 }
 
-func readTextWindows(ctx context.Context) (string, error) {
-	// Check context before attempting clipboard access
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	default:
-	}
+// readTextWindows copies the clipboard text out under a locked OS thread and a
+// short clipboard hold. All heavy work (none, for text) stays outside the hold.
+func readTextWindows() (string, error) {
+	// The Win32 clipboard is thread-affine: OpenClipboard and CloseClipboard must
+	// run on the same OS thread. Pin the goroutine so the runtime can't migrate it
+	// mid-sequence, which would strand the clipboard open and break it system-wide.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
-	if !openClipboard() {
+	if !openClipboardRetry() {
 		return "", fmt.Errorf("failed to open clipboard")
 	}
 	defer closeClipboard()
 
-	if ok, _, _ := procIsClipboardFormatAvailable.Call(uintptr(cfText)); ok == 0 {
+	if !isFormatAvailable(cfText) {
 		return "", nil
 	}
 
@@ -139,28 +150,51 @@ func readTextWindows(ctx context.Context) (string, error) {
 	}
 	defer procGlobalUnlock.Call(handle)
 
-	// Convert Windows string to Go string (null-terminated)
-	cstr := (*[1 << 20]byte)(unsafe.Pointer(lockedPtr))[:]
-	var length int
+	size, _, _ := procGlobalSize.Call(handle)
+	if size == 0 {
+		return "", nil
+	}
+
+	cstr := (*[1 << 30]byte)(unsafe.Pointer(lockedPtr))[:int(size):int(size)]
+	length := int(size)
 	for i := 0; i < len(cstr); i++ {
 		if cstr[i] == 0 {
 			length = i
 			break
 		}
 	}
-
 	return string(cstr[:length]), nil
 }
 
-func readImageWindows(ctx context.Context) ([]byte, error) {
-	// Check context before attempting clipboard access
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+// readImageWindows copies the raw DIB bytes out under a short, thread-locked
+// clipboard hold, then decodes/encodes to PNG *after* releasing the clipboard.
+// Keeping the heavy work outside the hold is what prevents the clipboard from
+// being stranded open (which previously killed Ctrl+C app-wide).
+func readImageWindows() ([]byte, error) {
+	raw, err := readDIBRaw()
+	if err != nil {
+		return nil, err
 	}
 
-	if !openClipboard() {
+	img, err := dibToImage(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert DIB to image: %w", err)
+	}
+
+	var pngBuf bytes.Buffer
+	if err := png.Encode(&pngBuf, img); err != nil {
+		return nil, fmt.Errorf("failed to encode image as PNG: %w", err)
+	}
+	return pngBuf.Bytes(), nil
+}
+
+// readDIBRaw returns a private copy of the clipboard's CF_DIB bytes. The
+// clipboard is held only for the memcpy.
+func readDIBRaw() ([]byte, error) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	if !openClipboardRetry() {
 		return nil, fmt.Errorf("failed to open clipboard")
 	}
 	defer closeClipboard()
@@ -185,142 +219,120 @@ func readImageWindows(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("failed to get clipboard image size")
 	}
 
-	// Safety limit: don't try to process images larger than 100MB
 	const maxImageSize = 100 * 1024 * 1024
 	if size > maxImageSize {
 		return nil, fmt.Errorf("clipboard image too large: %d bytes (max: %d)", size, maxImageSize)
 	}
 
-	dibData := (*[1 << 30]byte)(unsafe.Pointer(lockedPtr))[:size:size]
-
-	img, err := dibToImage(dibData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert DIB to image: %w", err)
-	}
-
-	var pngBuf bytes.Buffer
-	if err := png.Encode(&pngBuf, img); err != nil {
-		return nil, fmt.Errorf("failed to encode image as PNG: %w", err)
-	}
-
-	return pngBuf.Bytes(), nil
+	src := (*[1 << 30]byte)(unsafe.Pointer(lockedPtr))[:int(size):int(size)]
+	raw := make([]byte, int(size))
+	copy(raw, src)
+	return raw, nil
 }
 
-func dibToImage(dibData []byte) (image.Image, error) {
-	const maxDimension = 16000 // reasonable screen resolution limit
-
-	if len(dibData) < 40 {
-		return nil, fmt.Errorf("DIB data too small for header")
-	}
-
-	reader := bytes.NewReader(dibData)
-	var hdr struct {
-		Size      uint32
-		Width     int32
-		Height    int32
-		Planes    uint16
-		BitCount  uint16
-		Compress  uint32
-		ImageSize uint32
-		XPelsPerM int32
-		YPelsPerM int32
-		ClrUsed   uint32
-		ClrImport uint32
-	}
-
-	if err := binary.Read(reader, binary.LittleEndian, &hdr); err != nil {
-		return nil, err
-	}
-
-	if hdr.Width <= 0 || hdr.Height <= 0 {
-		return nil, fmt.Errorf("invalid DIB dimensions: %dx%d (BitCount: %d)", hdr.Width, hdr.Height, hdr.BitCount)
-	}
-
-	// Prevent allocating huge images
-	if hdr.Width > maxDimension || hdr.Height > maxDimension {
-		return nil, fmt.Errorf("DIB dimensions too large: %dx%d (max: %d)", hdr.Width, hdr.Height, maxDimension)
-	}
-
-	// Skip compressed DIB formats - we only handle uncompressed (Compress=0)
-	// Compress=1: RLE 8-bit, Compress=2: RLE 4-bit, Compress=3: Bitfields, etc.
-	if hdr.Compress != 0 {
-		return nil, fmt.Errorf("unsupported compressed DIB format: Compress=%d (only uncompressed supported)", hdr.Compress)
-	}
-
-	height := int(hdr.Height)
-	if hdr.Height < 0 {
-		height = -height
-	}
-
-	rect := image.Rect(0, 0, int(hdr.Width), height)
-	dst := image.NewRGBA(rect)
-
-	switch hdr.BitCount {
-	case 24, 32:
-		if err := decodeDIBPixels(reader, dst, int(hdr.Width), height, int(hdr.BitCount)); err != nil {
-			fmt.Printf("DEBUG: decodeDIBPixels failed: %v\n", err)
-			return nil, fmt.Errorf("decode pixels (BitCount=%d, %dx%d): %w", hdr.BitCount, hdr.Width, height, err)
+// dibToImage decodes a packed DIB (BITMAPINFOHEADER/V4/V5, 24- or 32-bit,
+// BI_RGB or BI_BITFIELDS) into an opaque RGBA image. It indexes the byte slice
+// directly (no streaming reader) and recovers from any out-of-range panic so a
+// malformed DIB can never crash the app.
+func dibToImage(dib []byte) (img image.Image, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			img, err = nil, fmt.Errorf("panic decoding DIB: %v", r)
 		}
-	default:
-		return nil, fmt.Errorf("unsupported DIB bit count: %d (Width:%d Height:%d)", hdr.BitCount, hdr.Width, hdr.Height)
+	}()
+
+	const maxDimension = 20000
+	if len(dib) < 40 {
+		return nil, fmt.Errorf("DIB data too small for header (%d bytes)", len(dib))
 	}
 
+	le := binary.LittleEndian
+	biSize := le.Uint32(dib[0:4])
+	width := int(int32(le.Uint32(dib[4:8])))
+	rawHeight := int(int32(le.Uint32(dib[8:12])))
+	bitCount := int(le.Uint16(dib[14:16]))
+	compression := le.Uint32(dib[16:20])
+
+	topDown := false
+	height := rawHeight
+	if height < 0 {
+		height = -height
+		topDown = true
+	}
+
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("invalid DIB dimensions: %dx%d", width, rawHeight)
+	}
+	if width > maxDimension || height > maxDimension {
+		return nil, fmt.Errorf("DIB dimensions too large: %dx%d (max: %d)", width, height, maxDimension)
+	}
+	if bitCount != 24 && bitCount != 32 {
+		return nil, fmt.Errorf("unsupported DIB bit count: %d", bitCount)
+	}
+
+	// Locate the pixel data. For a 40-byte BITMAPINFOHEADER, BI_BITFIELDS color
+	// masks (3 or 4 DWORDs) sit between the header and the pixels. For V4/V5
+	// headers (>=108 bytes) the masks live inside the header itself.
+	pixelOffset := int(biSize)
+	if biSize <= 40 {
+		switch compression {
+		case biRGB:
+			pixelOffset = 40
+		case biBitfields:
+			pixelOffset = 40 + 12
+		case biAlphaFields:
+			pixelOffset = 40 + 16
+		default:
+			return nil, fmt.Errorf("unsupported DIB compression: %d", compression)
+		}
+	} else if compression != biRGB && compression != biBitfields && compression != biAlphaFields {
+		return nil, fmt.Errorf("unsupported DIB compression: %d", compression)
+	}
+	if pixelOffset < 0 || pixelOffset >= len(dib) {
+		return nil, fmt.Errorf("pixel offset %d outside DIB data (%d bytes)", pixelOffset, len(dib))
+	}
+
+	bytesPerPixel := bitCount / 8
+	rowSize := ((width*bitCount + 31) / 32) * 4 // rows are padded to 4-byte boundaries
+	pix := dib[pixelOffset:]
+
+	dst := image.NewRGBA(image.Rect(0, 0, width, height))
+	for row := 0; row < height; row++ {
+		// DIBs are bottom-up unless the height was negative (top-down).
+		srcRow := height - 1 - row
+		if topDown {
+			srcRow = row
+		}
+		rowStart := srcRow * rowSize
+		if rowStart+width*bytesPerPixel > len(pix) {
+			break // truncated data: leave the remaining rows blank rather than panic
+		}
+		di := dst.PixOffset(0, row)
+		for x := 0; x < width; x++ {
+			si := rowStart + x*bytesPerPixel
+			// DIB stores BGR(A); force the image opaque because clipboard DIB alpha
+			// is frequently zero/garbage and would otherwise render fully transparent.
+			dst.Pix[di] = pix[si+2]   // R
+			dst.Pix[di+1] = pix[si+1] // G
+			dst.Pix[di+2] = pix[si]   // B
+			dst.Pix[di+3] = 255       // A
+			di += 4
+		}
+	}
 	return dst, nil
 }
 
-func decodeDIBPixels(reader *bytes.Reader, dst *image.RGBA, width, height, bitCount int) error {
-	bytesPerPixel := bitCount / 8
-	rowSize := ((width*bitCount + 31) / 32) * 4
-
-	for y := height - 1; y >= 0; y-- {
-		for x := 0; x < width; x++ {
-			var b, g, r, a uint8 = 0, 0, 0, 255
-
-			if bitCount == 24 {
-				if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
-					// EOF or read error: fill rest with black, return success
-					return nil
-				}
-				if err := binary.Read(reader, binary.LittleEndian, &g); err != nil {
-					return nil
-				}
-				if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
-					return nil
-				}
-			} else if bitCount == 32 {
-				if err := binary.Read(reader, binary.LittleEndian, &b); err != nil {
-					return nil
-				}
-				if err := binary.Read(reader, binary.LittleEndian, &g); err != nil {
-					return nil
-				}
-				if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
-					return nil
-				}
-				if err := binary.Read(reader, binary.LittleEndian, &a); err != nil {
-					return nil
-				}
-			}
-
-			dst.SetRGBA(x, y, color.RGBA{r, g, b, a})
+// openClipboardRetry opens the clipboard, retrying briefly to ride out the
+// common case where another app holds it open for a moment. Must be called with
+// the OS thread already locked.
+func openClipboardRetry() bool {
+	for i := 0; i < 12; i++ {
+		if r, _, _ := procOpenClipboard.Call(0); r != 0 {
+			return true
 		}
-
-		readBytes := width * bytesPerPixel
-		padding := rowSize - readBytes
-		if padding > 0 {
-			_, err := reader.Read(make([]byte, padding))
-			if err != nil && err.Error() != "EOF" {
-				return err
-			}
-		}
+		time.Sleep(10 * time.Millisecond)
 	}
-
-	return nil
-}
-
-func openClipboard() bool {
-	r, _, _ := procOpenClipboard.Call(0)
-	return r != 0
+	return false
 }
 
 func closeClipboard() bool {

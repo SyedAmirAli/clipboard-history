@@ -238,7 +238,9 @@ func (s *Service) PasteItem(id int64) error {
 	if err := s.writeToClipboard(id); err != nil {
 		return err
 	}
-	s.HidePopup()
+	// Minimise to the taskbar (not hide to tray) so the window stays reachable
+	// there after the user grabs an item.
+	s.MinimizePopup()
 
 	// Auto-paste: after the popup hides and focus returns to the user's
 	// previous window, synthesise Ctrl+V so the value drops straight into the
@@ -863,12 +865,23 @@ func (s *Service) ShowPopup() {
 	s.visible.Store(true)
 }
 
-// HidePopup hides the popup window.
+// HidePopup hides the popup window (to the tray).
 func (s *Service) HidePopup() {
 	if s.ctx == nil {
 		return
 	}
 	wailsruntime.WindowHide(s.ctx)
+	s.visible.Store(false)
+}
+
+// MinimizePopup minimises the window to the taskbar instead of hiding it to the
+// tray, so it stays visible/reachable there. Used after pasting an item. The
+// global hotkey still restores it (ShowPopup unminimises).
+func (s *Service) MinimizePopup() {
+	if s.ctx == nil {
+		return
+	}
+	wailsruntime.WindowMinimise(s.ctx)
 	s.visible.Store(false)
 }
 

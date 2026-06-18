@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -195,7 +196,16 @@ func (s *Service) ListItems(filter string, limit int) ([]clipboard.Item, error) 
 
 // writeToClipboard puts a stored item onto the X11 CLIPBOARD selection,
 // suppressing the watcher so our own write isn't re-ingested as a new entry.
-func (s *Service) writeToClipboard(id int64) error {
+// It recovers from any panic in the platform clipboard code so a bad stored
+// blob returns an error to the UI instead of taking the whole app down.
+func (s *Service) writeToClipboard(id int64) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("writeToClipboard(%d): recovered from panic: %v\n%s", id, r, debug.Stack())
+			err = fmt.Errorf("could not place item on clipboard: %v", r)
+		}
+	}()
+
 	ct, text, blob, err := s.store.GetForPaste(id)
 	if err != nil {
 		return err

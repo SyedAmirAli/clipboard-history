@@ -108,13 +108,18 @@ func allocGlobal(data []byte) (uintptr, error) {
 	return hMem, nil
 }
 
-// imageToDIB encodes an image as a packed 32-bit bottom-up DIB
-// (BITMAPINFOHEADER + BGRA pixels). Alpha is forced opaque so pasted images
-// never come out transparent in apps that honour the alpha channel.
+// imageToDIB encodes an image as a packed 24-bit bottom-up DIB
+// (BITMAPINFOHEADER + BGR pixels, rows padded to 4 bytes). 24-bit BI_RGB is the
+// most widely accepted clipboard bitmap format — many apps (and some paste
+// targets that report "image format is not supported") refuse 32-bit DIBs, so
+// we flatten to opaque 24-bit for maximum compatibility.
 func imageToDIB(img image.Image) ([]byte, error) {
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
+
+	rowSize := ((width*24 + 31) / 32) * 4 // each row padded to a 4-byte boundary
+	padding := rowSize - width*3
 
 	var buf bytes.Buffer
 
@@ -135,7 +140,8 @@ func imageToDIB(img image.Image) ([]byte, error) {
 		Width:     int32(width),
 		Height:    int32(height),
 		Planes:    1,
-		BitCount:  32,
+		BitCount:  24,
+		ImageSize: uint32(rowSize * height),
 		XPelsPerM: 2835,
 		YPelsPerM: 2835,
 	}
@@ -144,15 +150,15 @@ func imageToDIB(img image.Image) ([]byte, error) {
 		return nil, err
 	}
 
-	// 32-bit rows are inherently 4-byte aligned, so no extra padding is needed.
+	pad := make([]byte, padding)
 	for y := height - 1; y >= 0; y-- {
 		for x := 0; x < width; x++ {
 			r32, g32, b32, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
 			buf.WriteByte(uint8(b32 >> 8))
 			buf.WriteByte(uint8(g32 >> 8))
 			buf.WriteByte(uint8(r32 >> 8))
-			buf.WriteByte(255)
 		}
+		buf.Write(pad)
 	}
 
 	return buf.Bytes(), nil

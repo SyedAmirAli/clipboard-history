@@ -8,9 +8,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
+	_ "image/gif"  // register GIF decoder for clipboard image validation
+	_ "image/jpeg" // register JPEG decoder for clipboard image validation
 	"image/png"
 	"log"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -91,9 +94,21 @@ func (w *Watcher) loop(ctx context.Context) {
 				continue
 			}
 			lastSeq = seq
-			w.tick(ctx)
+			w.tickSafely(ctx)
 		}
 	}
+}
+
+// tickSafely runs one poll, recovering from any panic so a malformed clipboard
+// payload can never crash the whole app. The stack is logged so it stays
+// diagnosable.
+func (w *Watcher) tickSafely(ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("clipboard watcher: recovered from panic: %v\n%s", r, debug.Stack())
+		}
+	}()
+	w.tick(ctx)
 }
 
 func (w *Watcher) tick(ctx context.Context) {
@@ -184,7 +199,10 @@ var (
 )
 
 func registerPNGFormats() {
-	for _, name := range []string{"PNG", "image/png"} {
+	// Different apps expose copied images under different registered names. We try
+	// the common ones; the bytes are decoded with image.Decode (PNG/JPEG/GIF),
+	// so any of these that carries a standard encoded image will be captured.
+	for _, name := range []string{"PNG", "image/png", "image/x-png", "image/jpeg", "JFIF", "image/gif", "GIF"} {
 		if p, err := syscall.UTF16PtrFromString(name); err == nil {
 			if id, _, _ := procRegisterClipboardFormatW.Call(uintptr(unsafe.Pointer(p))); id != 0 {
 				pngFormatIDs = append(pngFormatIDs, uint32(id))

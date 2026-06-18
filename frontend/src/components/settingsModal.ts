@@ -19,6 +19,8 @@ export interface SettingsModalDeps {
   clearAll: (keepPinned: boolean) => Promise<void>;
   systemInfo: () => Promise<SystemInfo>;
   pickFolder: () => Promise<string>;
+  exportAll: () => Promise<string>;
+  flash: (msg: string) => void;
   chrome: SettingsChrome;
   confirm: ConfirmDialog;
 }
@@ -36,6 +38,7 @@ const SVG_TRASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const SVG_X = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 const SVG_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 const SVG_FOLDER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+const SVG_DOWNLOAD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 
 interface StepCfg {
   min: number;
@@ -197,6 +200,13 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
           </div>
           <button class="s-btn" data-action="browse-folder">${SVG_FOLDER}Browse…</button>
         </div>
+        <div class="s-row">
+          <div class="s-info">
+            <div class="s-lbl">Export all to ZIP</div>
+            <div class="s-hint">Save every history item (text + images) into one .zip</div>
+          </div>
+          <button class="s-btn" data-action="export-zip">${SVG_DOWNLOAD}Export…</button>
+        </div>
 
         ${session}
       </div>
@@ -302,6 +312,20 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         }
       } catch {
         /* dialog cancelled or unavailable — ignore */
+      }
+    });
+
+    // Export-all-to-ZIP — opens a Save As dialog and writes every item.
+    root.querySelector<HTMLButtonElement>('[data-action="export-zip"]')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      btn.disabled = true;
+      try {
+        const path = await deps.exportAll();
+        if (path) deps.flash('Exported to ' + path);
+      } catch (err) {
+        deps.flash('Export failed: ' + String(err));
+      } finally {
+        btn.disabled = false;
       }
     });
 

@@ -4,6 +4,7 @@
 package service
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -312,6 +313,79 @@ func writeInto(dir, base, ext string, data []byte) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// ExportAllToZip writes every history item into a single .zip — text items under
+// text/, images under images/ — at a location chosen via a native Save As
+// dialog. It returns the zip path, or "" if the user cancelled.
+func (s *Service) ExportAllToZip() (string, error) {
+	if s.ctx == nil {
+		return "", errors.New("window not ready")
+	}
+	items, err := s.store.List("", 1_000_000)
+	if err != nil {
+		return "", err
+	}
+	if len(items) == 0 {
+		return "", errors.New("history is empty — nothing to export")
+	}
+
+	dest, err := wailsruntime.SaveFileDialog(s.ctx, wailsruntime.SaveDialogOptions{
+		Title:                "Export all clipboard items to a ZIP",
+		DefaultDirectory:     s.currentSaveFolder(),
+		DefaultFilename:      "clipd-export-" + time.Now().Format("2006-01-02") + ".zip",
+		CanCreateDirectories: true,
+		Filters:              []wailsruntime.FileFilter{{DisplayName: "Zip archive (*.zip)", Pattern: "*.zip"}},
+	})
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(dest) == "" {
+		return "", nil // user cancelled
+	}
+	if !strings.EqualFold(filepath.Ext(dest), ".zip") {
+		dest += ".zip"
+	}
+
+	f, err := os.Create(dest)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	zw := zip.NewWriter(f)
+
+	for _, it := range items {
+		ct, text, blob, err := s.store.GetForPaste(it.ID)
+		if err != nil {
+			continue // skip an unreadable item rather than abort the whole export
+		}
+		ts := time.Unix(it.CreatedAt, 0).Format("2006-01-02_15-04-05")
+		var name string
+		var data []byte
+		switch ct {
+		case clipboard.ContentTypeText:
+			name = fmt.Sprintf("text/clipd-%s-%d.txt", ts, it.ID)
+			data = []byte(text)
+		case clipboard.ContentTypeImage:
+			name = fmt.Sprintf("images/clipd-%s-%d.png", ts, it.ID)
+			data = blob
+		default:
+			continue
+		}
+		w, err := zw.Create(name)
+		if err != nil {
+			_ = zw.Close()
+			return "", err
+		}
+		if _, err := w.Write(data); err != nil {
+			_ = zw.Close()
+			return "", err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return "", err
+	}
+	return dest, nil
 }
 
 // PickSaveFolder opens a native folder picker and returns the chosen directory

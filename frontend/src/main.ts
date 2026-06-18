@@ -57,6 +57,8 @@ const settings = createSettingsModal(els.settings, {
     },
     systemInfo: () => api.systemInfo(),
     pickFolder: () => api.pickSaveFolder(),
+    exportAll: () => api.exportAllToZip(),
+    flash,
     chrome: { scrim: els.scrim, mainContent: els.mainContent },
     confirm,
 });

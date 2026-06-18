@@ -45,6 +45,7 @@ declare global {
           UpdateSettings(s: AppSettings): Promise<AppSettings>;
           SaveItemToFile(id: number): Promise<string>;
           PickSaveFolder(): Promise<string>;
+          ExportAllToZip(): Promise<string>;
           ShowPopup(): Promise<void>;
           HidePopup(): Promise<void>;
           TogglePopup(): Promise<void>;
@@ -159,6 +160,9 @@ export const api = {
   },
   pickSaveFolder(): Promise<string> {
     return svc().PickSaveFolder();
+  },
+  exportAllToZip(): Promise<string> {
+    return svc().ExportAllToZip();
   },
   hidePopup(): Promise<void> {
     return svc().HidePopup();

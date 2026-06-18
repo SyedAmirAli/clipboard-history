@@ -6,29 +6,26 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/Microsoft/go-winio"
 )
 
-// Listener opens a named pipe for IPC on Windows.
+// Listener owns a Windows named-pipe server for IPC. The Go standard library's
+// net package has no "pipe" network, so we use go-winio (already pulled in via
+// Wails' dependency tree) to create a real named pipe.
 type Listener struct {
-	pipePath string
 	listener net.Listener
 	done     chan struct{}
 }
 
-// Listen creates a named pipe listener for Windows IPC.
+// Listen creates a named-pipe listener (e.g. \\.\pipe\clipd) and dispatches each
+// received command string to handler.
 func Listen(pipePath string, handler func(string)) (*Listener, error) {
-	// On Windows, use net.Listen with "pipe" network
-	listener, err := net.Listen("pipe", pipePath)
+	listener, err := winio.ListenPipe(pipePath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create named pipe listener: %w", err)
 	}
-
-	ln := &Listener{
-		pipePath: pipePath,
-		listener: listener,
-		done:     make(chan struct{}),
-	}
-
+	ln := &Listener{listener: listener, done: make(chan struct{})}
 	go ln.acceptLoop(handler)
 	return ln, nil
 }
@@ -38,27 +35,22 @@ func (ln *Listener) acceptLoop(handler func(string)) {
 	for {
 		conn, err := ln.listener.Accept()
 		if err != nil {
-			// Listener was closed
-			return
+			return // listener closed
 		}
-
 		go func(c net.Conn) {
 			defer c.Close()
-			c.SetReadDeadline(time.Now().Add(2 * time.Second))
-
+			_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
 			buf := make([]byte, 256)
 			n, err := c.Read(buf)
 			if err != nil {
 				return
 			}
-
-			cmd := string(buf[:n])
-			handler(cmd)
+			handler(string(buf[:n]))
 		}(conn)
 	}
 }
 
-// Close closes the named pipe listener.
+// Close stops the listener and waits for the accept loop to finish.
 func (ln *Listener) Close() error {
 	if ln.listener != nil {
 		ln.listener.Close()
@@ -67,25 +59,25 @@ func (ln *Listener) Close() error {
 	return nil
 }
 
-// Send sends a command to the running instance via named pipe.
+// Send connects to the running instance's pipe and writes a single command.
 func Send(pipePath string, cmd string) error {
-	conn, err := net.Dial("pipe", pipePath)
+	timeout := 2 * time.Second
+	conn, err := winio.DialPipe(pipePath, &timeout)
 	if err != nil {
 		return fmt.Errorf("failed to connect to named pipe: %w", err)
 	}
 	defer conn.Close()
-
-	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
 	if _, err := conn.Write([]byte(cmd)); err != nil {
 		return fmt.Errorf("failed to send command: %w", err)
 	}
-
 	return nil
 }
 
-// IsRunning checks if a named pipe listener is active.
+// IsRunning reports whether a clipd instance is listening on the pipe.
 func IsRunning(pipePath string) bool {
-	conn, err := net.Dial("pipe", pipePath)
+	timeout := 500 * time.Millisecond
+	conn, err := winio.DialPipe(pipePath, &timeout)
 	if err != nil {
 		return false
 	}

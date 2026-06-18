@@ -1,14 +1,16 @@
-// Package tray installs a system tray (AppIndicator) icon with a menu
-// that mirrors the Wails app's primary actions.
+// Package tray installs a Windows system-tray icon with a menu that mirrors the
+// app's primary actions.
 //
-// On Linux, fyne.io/systray uses libayatana-appindicator under the hood.
-// Wails already owns the process-wide GTK main loop, so we call
-// systray.Register (NOT Run) — Register sets up the indicator without
-// starting its own GTK loop, and Wails's running loop pumps the events.
+// We run systray on its own dedicated OS thread via systray.Run (NOT Register).
+// On Windows the tray needs its own GetMessage loop to dispatch icon clicks and
+// the right-click menu; Register relies on the host (Wails) loop, which does not
+// pump the tray window's messages, so the menu never appears. Running on a
+// locked thread keeps the tray loop independent of Wails' main loop.
 package tray
 
 import (
 	_ "embed"
+	"runtime"
 
 	"fyne.io/systray"
 )
@@ -27,54 +29,55 @@ type Callbacks struct {
 //go:embed icon.ico
 var iconICO []byte
 
-// Start installs the tray indicator and wires its menu items to cb.
-// It returns immediately — menu click pumping happens on a goroutine.
-//
-// Start MUST be called only after Wails has initialised GTK (i.e. from
-// the OnStartup hook), otherwise the AppIndicator handle would have
-// nothing to attach to.
+// Start installs the tray icon and wires its menu items to cb. It returns
+// immediately; the tray's own message loop runs on a dedicated, OS-locked
+// goroutine so it functions independently of Wails' main loop.
 func Start(cb Callbacks) {
-	systray.Register(func() {
-		systray.SetIcon(iconICO)
-		systray.SetTitle("clipd")
-		systray.SetTooltip("Clipboard History")
+	go func() {
+		// The tray window and its message loop must live on the same OS thread.
+		runtime.LockOSThread()
+		systray.Run(func() {
+			systray.SetIcon(iconICO)
+			systray.SetTitle("clipd")
+			systray.SetTooltip("Clipboard History")
 
-		mOpen := systray.AddMenuItem("Open clipboard history", "Show the history popup")
-		mClear := systray.AddMenuItem("Clear history", "Delete all non-pinned items")
-		mSettings := systray.AddMenuItem("Settings…", "Configure clipd")
-		systray.AddSeparator()
-		mQuit := systray.AddMenuItem("Quit clipd", "Exit the application")
+			mOpen := systray.AddMenuItem("Open clipboard history", "Show the history popup")
+			mClear := systray.AddMenuItem("Clear history", "Delete all non-pinned items")
+			mSettings := systray.AddMenuItem("Settings…", "Configure clipd")
+			systray.AddSeparator()
+			mQuit := systray.AddMenuItem("Quit clipd", "Exit the application")
 
-		go func() {
-			for {
-				select {
-				case <-mOpen.ClickedCh:
-					if cb.OnOpen != nil {
-						cb.OnOpen()
+			go func() {
+				for {
+					select {
+					case <-mOpen.ClickedCh:
+						if cb.OnOpen != nil {
+							cb.OnOpen()
+						}
+					case <-mClear.ClickedCh:
+						if cb.OnClear != nil {
+							cb.OnClear()
+						}
+					case <-mSettings.ClickedCh:
+						if cb.OnSettings != nil {
+							cb.OnSettings()
+						}
+					case <-mQuit.ClickedCh:
+						if cb.OnQuit != nil {
+							cb.OnQuit()
+						}
+						return
 					}
-				case <-mClear.ClickedCh:
-					if cb.OnClear != nil {
-						cb.OnClear()
-					}
-				case <-mSettings.ClickedCh:
-					if cb.OnSettings != nil {
-						cb.OnSettings()
-					}
-				case <-mQuit.ClickedCh:
-					if cb.OnQuit != nil {
-						cb.OnQuit()
-					}
-					return
 				}
-			}
-		}()
-	}, func() {
-		// onExit: no-op; Wails handles process teardown.
-	})
+			}()
+		}, func() {
+			// onExit: no-op; Wails handles process teardown.
+		})
+	}()
 }
 
-// Quit removes the tray indicator. Call before the app exits if you
-// want the icon to disappear immediately.
+// Quit removes the tray icon. Call before the app exits if you want the icon to
+// disappear immediately.
 func Quit() {
 	systray.Quit()
 }

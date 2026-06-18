@@ -1043,13 +1043,14 @@ func (s *Service) ShowPopup() {
 	clipboard.SetTaskbarVisible("clipd", s.CurrentSettings().ShowInTaskbar)
 	wailsruntime.WindowShow(s.ctx)
 	wailsruntime.WindowUnminimise(s.ctx) // restore if minimised to the taskbar
-	// In windowed mode the user owns the window position and stacking, so we
-	// don't force always-on-top or re-center on every summon. In popup mode
-	// we keep the classic Windows+V behaviour: float on top, centered.
+	// In popup mode keep the classic always-on-top behaviour.
 	if !s.CurrentSettings().WindowFrame {
 		wailsruntime.WindowSetAlwaysOnTop(s.ctx, true)
-		wailsruntime.WindowCenter(s.ctx)
 	}
+	// Position the window near the cursor — on the monitor the cursor is on — and
+	// raise it to the foreground. This makes Win+J open where the user is looking
+	// (vital on multi-monitor setups) instead of reappearing at its last spot.
+	clipboard.ShowAtCursor("clipd")
 	s.visible.Store(true)
 }
 
@@ -1075,7 +1076,10 @@ func (s *Service) MinimizePopup() {
 
 // TogglePopup is the canonical entrypoint for the hotkey and the tray.
 func (s *Service) TogglePopup() {
-	if s.visible.Load() {
+	// Only hide when clipd is actually the active window. If it's open but
+	// covered by another app, bring it to the front (and to the cursor) instead
+	// of hiding — otherwise the user would have to press the hotkey twice.
+	if s.visible.Load() && clipboard.IsForegroundWindow("clipd") {
 		s.HidePopup()
 	} else {
 		s.ShowPopup()

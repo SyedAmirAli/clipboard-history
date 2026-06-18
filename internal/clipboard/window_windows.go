@@ -9,9 +9,30 @@ import (
 
 // The user32 DLL handle (`user32`) is declared in paster_windows.go.
 var (
-	procFindWindowW    = user32.NewProc("FindWindowW")
-	procGetWindowLongW = user32.NewProc("GetWindowLongW")
-	procSetWindowLongW = user32.NewProc("SetWindowLongW")
+	procFindWindowW      = user32.NewProc("FindWindowW")
+	procGetWindowLongW   = user32.NewProc("GetWindowLongW")
+	procSetWindowLongW   = user32.NewProc("SetWindowLongW")
+	procGetCursorPos     = user32.NewProc("GetCursorPos")
+	procGetWindowRect    = user32.NewProc("GetWindowRect")
+	procMonitorFromPoint = user32.NewProc("MonitorFromPoint")
+	procGetMonitorInfoW  = user32.NewProc("GetMonitorInfoW")
+	procSetWindowPos     = user32.NewProc("SetWindowPos")
+)
+
+type point struct{ X, Y int32 }
+type rect struct{ Left, Top, Right, Bottom int32 }
+type monitorInfo struct {
+	CbSize    uint32
+	RcMonitor rect
+	RcWork    rect
+	DwFlags   uint32
+}
+
+const (
+	monitorDefaultToNearest = 0x00000002
+	hwndTop                 = 0
+	swpNoSize               = 0x0001
+	swpShowWindow           = 0x0040
 )
 
 const (
@@ -71,4 +92,66 @@ func findWindowByTitle(title string) uintptr {
 	}
 	hwnd, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(p)))
 	return hwnd
+}
+
+// ShowAtCursor moves the window with the given title to the monitor the cursor
+// is on — placed at the cursor, clamped so it stays fully within that monitor's
+// work area — and raises it to the foreground. Used when summoning the popup so
+// it appears where the user is looking, which matters on multi-monitor setups.
+func ShowAtCursor(title string) {
+	hwnd := findWindowByTitle(title)
+	if hwnd == 0 {
+		return
+	}
+
+	var pt point
+	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+
+	var rc rect
+	procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rc)))
+	w := rc.Right - rc.Left
+	h := rc.Bottom - rc.Top
+
+	work := cursorMonitorWork(pt)
+	x, y := pt.X, pt.Y
+	if x+w > work.Right {
+		x = work.Right - w
+	}
+	if y+h > work.Bottom {
+		y = work.Bottom - h
+	}
+	if x < work.Left {
+		x = work.Left
+	}
+	if y < work.Top {
+		y = work.Top
+	}
+
+	procSetWindowPos.Call(hwnd, hwndTop, uintptr(x), uintptr(y), 0, 0, swpNoSize|swpShowWindow)
+	procSetForegroundWindow.Call(hwnd)
+}
+
+// cursorMonitorWork returns the work area (screen minus taskbar) of the monitor
+// containing pt. On failure it returns a very large rect so position clamping
+// becomes a no-op.
+func cursorMonitorWork(pt point) rect {
+	packed := uintptr(uint32(pt.X)) | (uintptr(uint32(pt.Y)) << 32)
+	hmon, _, _ := procMonitorFromPoint.Call(packed, monitorDefaultToNearest)
+	var mi monitorInfo
+	mi.CbSize = uint32(unsafe.Sizeof(mi))
+	if ok, _, _ := procGetMonitorInfoW.Call(hmon, uintptr(unsafe.Pointer(&mi))); ok == 0 {
+		return rect{Left: -1 << 15, Top: -1 << 15, Right: 1 << 15, Bottom: 1 << 15}
+	}
+	return mi.RcWork
+}
+
+// IsForegroundWindow reports whether the window with the given title is the
+// current foreground (active) window.
+func IsForegroundWindow(title string) bool {
+	hwnd := findWindowByTitle(title)
+	if hwnd == 0 {
+		return false
+	}
+	fg, _, _ := procGetForegroundWindow.Call()
+	return fg == hwnd
 }

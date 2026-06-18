@@ -56,6 +56,7 @@ const settings = createSettingsModal(els.settings, {
         await refresh();
     },
     systemInfo: () => api.systemInfo(),
+    pickFolder: () => api.pickSaveFolder(),
     chrome: { scrim: els.scrim, mainContent: els.mainContent },
     confirm,
 });
@@ -68,6 +69,15 @@ async function doPaste(item: ClipItem) {
         flash("Copied to clipboard");
     } catch (err) {
         flash("Paste failed: " + String(err));
+    }
+}
+
+async function doSave(item: ClipItem) {
+    try {
+        const path = await api.saveItemToFile(item.id);
+        flash("Saved to " + path);
+    } catch (err) {
+        flash("Save failed: " + String(err));
     }
 }
 
@@ -132,6 +142,7 @@ const vaultPanel = createVaultPanel(els.vaultModal, {
 const list = createItemList(els.list, {
     onPaste: doPaste,
     onCopy: doCopy,
+    onSave: doSave,
     onPinToggle: async (item) => {
         await api.pinItem(item.id, !item.pinned);
         await refresh();
@@ -143,6 +154,7 @@ const list = createItemList(els.list, {
 
 const ctxMenu = createContextMenu(els.ctxMenu, {
     onCopy: doCopy,
+    onSave: doSave,
     onPinToggle: async (item) => {
         await api.pinItem(item.id, !item.pinned);
         await refresh();

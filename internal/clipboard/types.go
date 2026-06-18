@@ -49,6 +49,9 @@ type Settings struct {
 	// minimises to the taskbar). When false, the window is a taskbar-less popup.
 	// Applied live.
 	ShowInTaskbar bool `json:"showInTaskbar"`
+	// SaveFolder is the directory where "Save to file" writes items. Empty means
+	// the user's Downloads folder.
+	SaveFolder string `json:"saveFolder"`
 }
 
 // DefaultSettings returns platform-specific default settings.

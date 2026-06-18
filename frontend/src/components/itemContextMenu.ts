@@ -5,6 +5,7 @@ import type { ClipItem } from '../types';
 
 export interface ContextMenuActions {
   onCopy(item: ClipItem): void;
+  onSave(item: ClipItem): void;
   onPinToggle(item: ClipItem): void;
   onMoveToVault(item: ClipItem): void;
   onDelete(item: ClipItem): void;
@@ -19,6 +20,7 @@ const SVG_PIN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 const SVG_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
 const SVG_DELETE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
 const SVG_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+const SVG_SAVE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 
 export function createContextMenu(root: HTMLElement, actions: ContextMenuActions): ContextMenu {
   let currentItem: ClipItem | null = null;
@@ -32,6 +34,7 @@ export function createContextMenu(root: HTMLElement, actions: ContextMenuActions
     currentItem = item;
     root.innerHTML = `
       <div class="mi" data-act="paste">${SVG_COPY}<span>Copy to clipboard</span></div>
+      <div class="mi" data-act="save">${SVG_SAVE}<span>Save to file</span></div>
       <div class="mi" data-act="pin">${SVG_PIN}<span>${item.pinned ? 'Unpin' : 'Pin to top'}</span></div>
       <div class="mi" data-act="vault">${SVG_LOCK}<span>Move to Vault</span></div>
       <div class="sep"></div>
@@ -58,6 +61,9 @@ export function createContextMenu(root: HTMLElement, actions: ContextMenuActions
     switch (target.dataset.act) {
       case 'paste':
         actions.onCopy(item);
+        break;
+      case 'save':
+        actions.onSave(item);
         break;
       case 'pin':
         actions.onPinToggle(item);

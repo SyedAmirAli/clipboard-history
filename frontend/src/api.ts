@@ -43,6 +43,8 @@ declare global {
           DeleteVaultItem(id: number): Promise<void>;
           GetSettings(): Promise<AppSettings>;
           UpdateSettings(s: AppSettings): Promise<AppSettings>;
+          SaveItemToFile(id: number): Promise<string>;
+          PickSaveFolder(): Promise<string>;
           ShowPopup(): Promise<void>;
           HidePopup(): Promise<void>;
           TogglePopup(): Promise<void>;
@@ -151,6 +153,12 @@ export const api = {
   },
   updateSettings(s: AppSettings): Promise<AppSettings> {
     return svc().UpdateSettings(s);
+  },
+  saveItemToFile(id: number): Promise<string> {
+    return svc().SaveItemToFile(id);
+  },
+  pickSaveFolder(): Promise<string> {
+    return svc().PickSaveFolder();
   },
   hidePopup(): Promise<void> {
     return svc().HidePopup();

@@ -18,6 +18,7 @@ export interface SettingsModalDeps {
   save: (s: AppSettings) => Promise<AppSettings>;
   clearAll: (keepPinned: boolean) => Promise<void>;
   systemInfo: () => Promise<SystemInfo>;
+  pickFolder: () => Promise<string>;
   chrome: SettingsChrome;
   confirm: ConfirmDialog;
 }
@@ -34,6 +35,7 @@ const SVG_PLUS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const SVG_TRASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
 const SVG_X = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
 const SVG_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+const SVG_FOLDER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
 
 interface StepCfg {
   min: number;
@@ -187,6 +189,15 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         ${switchRow('showInTaskbar', s.showInTaskbar, 'Show in taskbar', 'Give the window a taskbar button so it minimises to the taskbar. Off: a taskbar-less popup.')}
         ${switchRow('windowFrame', s.windowFrame, 'Taskbar window', 'On: a normal window with a taskbar entry. Off: floating always-on-top popup that hides on focus loss. Restart to apply.')}
 
+        <div class="s-section">Files</div>
+        <div class="s-row">
+          <div class="s-info">
+            <div class="s-lbl">Save folder</div>
+            <div class="s-hint" data-role="save-folder" title="${escapeHtml(s.saveFolder)}">${escapeHtml(s.saveFolder)}</div>
+          </div>
+          <button class="s-btn" data-action="browse-folder">${SVG_FOLDER}Browse…</button>
+        </div>
+
         ${session}
       </div>
 
@@ -274,6 +285,23 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         hotkeyEl.click();
+      }
+    });
+
+    // Save-folder picker — opens a native folder dialog and updates the path.
+    root.querySelector<HTMLButtonElement>('[data-action="browse-folder"]')?.addEventListener('click', async () => {
+      try {
+        const dir = await deps.pickFolder();
+        if (dir && current) {
+          current.saveFolder = dir;
+          const el = root.querySelector<HTMLElement>('[data-role="save-folder"]');
+          if (el) {
+            el.textContent = dir;
+            el.title = dir;
+          }
+        }
+      } catch {
+        /* dialog cancelled or unavailable — ignore */
       }
     });
 

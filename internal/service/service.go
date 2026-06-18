@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -274,6 +276,80 @@ func (s *Service) DeleteItem(id int64) error {
 		s.suppressor.Suppress(hash)
 	}
 	return nil
+}
+
+// ----- Save to file -----
+
+// SaveItemToFile writes a history item to a file in the configured save folder
+// (Downloads by default), auto-named by timestamp: text items become .txt,
+// image items become .png. It returns the full path written, for a confirmation
+// toast.
+func (s *Service) SaveItemToFile(id int64) (string, error) {
+	ct, text, blob, err := s.store.GetForPaste(id)
+	if err != nil {
+		return "", err
+	}
+	dir := s.currentSaveFolder()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create save folder: %w", err)
+	}
+	base := "clipd-" + time.Now().Format("2006-01-02_15-04-05")
+	switch ct {
+	case clipboard.ContentTypeText:
+		path := uniquePath(dir, base, ".txt")
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			return "", err
+		}
+		return path, nil
+	case clipboard.ContentTypeImage:
+		path := uniquePath(dir, base, ".png")
+		if err := os.WriteFile(path, blob, 0o644); err != nil {
+			return "", err
+		}
+		return path, nil
+	default:
+		return "", fmt.Errorf("unknown content type: %s", ct)
+	}
+}
+
+// PickSaveFolder opens a native folder picker and returns the chosen directory
+// (empty if cancelled). The frontend persists the choice via UpdateSettings.
+func (s *Service) PickSaveFolder() (string, error) {
+	if s.ctx == nil {
+		return "", errors.New("window not ready")
+	}
+	return wailsruntime.OpenDirectoryDialog(s.ctx, wailsruntime.OpenDialogOptions{
+		Title:            "Choose where to save clipboard items",
+		DefaultDirectory: s.currentSaveFolder(),
+	})
+}
+
+// currentSaveFolder returns the configured save folder, or Downloads when unset.
+func (s *Service) currentSaveFolder() string {
+	if f := strings.TrimSpace(s.CurrentSettings().SaveFolder); f != "" {
+		return f
+	}
+	return defaultSaveFolder()
+}
+
+// defaultSaveFolder is the user's Downloads directory.
+func defaultSaveFolder() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, "Downloads")
+	}
+	return "."
+}
+
+// uniquePath returns dir/base+ext, appending -2, -3, … if that file exists, so
+// two saves in the same second don't overwrite each other.
+func uniquePath(dir, base, ext string) string {
+	p := filepath.Join(dir, base+ext)
+	for i := 2; ; i++ {
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			return p
+		}
+		p = filepath.Join(dir, fmt.Sprintf("%s-%d%s", base, i, ext))
+	}
 }
 
 // ----- Private Vault -----
@@ -608,6 +684,10 @@ func (s *Service) GetSettings() (clipboard.Settings, error) {
 	out.WindowFrame = get("window_frame", boolStr(def.WindowFrame)) == "1"
 	out.AutoPaste = get("auto_paste", boolStr(def.AutoPaste)) == "1"
 	out.ShowInTaskbar = get("show_in_taskbar", boolStr(def.ShowInTaskbar)) == "1"
+	out.SaveFolder = get("save_folder", def.SaveFolder)
+	if strings.TrimSpace(out.SaveFolder) == "" {
+		out.SaveFolder = defaultSaveFolder()
+	}
 	if s.autostart != nil {
 		if v, err := s.autostart.IsEnabled(); err == nil {
 			out.Autostart = v
@@ -673,6 +753,9 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 		return prev, err
 	}
 	if err := put("show_in_taskbar", boolStr(in.ShowInTaskbar)); err != nil {
+		return prev, err
+	}
+	if err := put("save_folder", strings.TrimSpace(in.SaveFolder)); err != nil {
 		return prev, err
 	}
 	if s.hotkeyMgr != nil && in.Hotkey != prev.Hotkey {

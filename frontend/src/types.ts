@@ -30,6 +30,7 @@ export interface AppSettings {
   windowFrame: boolean;
   autoPaste: boolean;
   showInTaskbar: boolean;
+  saveFolder: string;
 }
 
 export interface SystemInfo {

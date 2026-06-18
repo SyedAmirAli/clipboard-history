@@ -280,36 +280,38 @@ func (s *Service) DeleteItem(id int64) error {
 
 // ----- Save to file -----
 
-// SaveItemToFile writes a history item to a file in the configured save folder
-// (Downloads by default), auto-named by timestamp: text items become .txt,
-// image items become .png. It returns the full path written, for a confirmation
-// toast.
+// SaveItemToFile writes a history item to a file under the configured save
+// folder (Downloads by default), auto-named by timestamp and sorted into a
+// subfolder by kind: text items go to <folder>/text/clipd-<ts>.txt, images to
+// <folder>/images/clipd-<ts>.png. It returns the full path written.
 func (s *Service) SaveItemToFile(id int64) (string, error) {
 	ct, text, blob, err := s.store.GetForPaste(id)
 	if err != nil {
 		return "", err
 	}
-	dir := s.currentSaveFolder()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create save folder: %w", err)
-	}
+	root := s.currentSaveFolder()
 	base := "clipd-" + time.Now().Format("2006-01-02_15-04-05")
 	switch ct {
 	case clipboard.ContentTypeText:
-		path := uniquePath(dir, base, ".txt")
-		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-			return "", err
-		}
-		return path, nil
+		return writeInto(filepath.Join(root, "text"), base, ".txt", []byte(text))
 	case clipboard.ContentTypeImage:
-		path := uniquePath(dir, base, ".png")
-		if err := os.WriteFile(path, blob, 0o644); err != nil {
-			return "", err
-		}
-		return path, nil
+		return writeInto(filepath.Join(root, "images"), base, ".png", blob)
 	default:
 		return "", fmt.Errorf("unknown content type: %s", ct)
 	}
+}
+
+// writeInto creates dir if needed and writes data to a uniquely-named file
+// (base+ext, with a numeric suffix on collision), returning the path.
+func writeInto(dir, base, ext string, data []byte) (string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create save folder: %w", err)
+	}
+	path := uniquePath(dir, base, ext)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // PickSaveFolder opens a native folder picker and returns the chosen directory

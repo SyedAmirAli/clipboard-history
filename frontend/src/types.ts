@@ -31,6 +31,7 @@ export interface AppSettings {
   autoPaste: boolean;
   showInTaskbar: boolean;
   saveFolder: string;
+  showPinnedInHistory: boolean;
 }
 
 export interface SystemInfo {

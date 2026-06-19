@@ -52,6 +52,9 @@ type Settings struct {
 	// SaveFolder is the directory where "Save to file" writes items. Empty means
 	// the user's Downloads folder.
 	SaveFolder string `json:"saveFolder"`
+	// ShowPinnedInHistory, when true, shows pinned items at the top of the
+	// "All" history tab. When false, pinned items only appear in the Pinned tab.
+	ShowPinnedInHistory bool `json:"showPinnedInHistory"`
 }
 
 // DefaultSettings returns platform-specific default settings.

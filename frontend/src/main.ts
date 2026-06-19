@@ -49,6 +49,7 @@ const settings = createSettingsModal(els.settings, {
         const saved = await api.updateSettings(s);
         currentSettings = saved;
         settings.applyTheme(saved.theme);
+        applyFilter();
         return saved;
     },
     clearAll: async (keep) => {
@@ -264,6 +265,7 @@ async function refresh() {
 
 /** Apply the active chip filter on top of the backend search result. */
 function applyFilter() {
+    const showPinned = currentSettings?.showPinnedInHistory ?? true;
     const visible = allItems.filter((it) => {
         switch (activeFilter) {
             case "text":
@@ -273,7 +275,7 @@ function applyFilter() {
             case "pinned":
                 return it.pinned;
             default:
-                return true;
+                return showPinned || !it.pinned;
         }
     });
     const isFiltered = activeFilter !== "all" || search.value().trim() !== "";

@@ -191,6 +191,7 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         ${switchRow('autoPaste', s.autoPaste, 'Auto-paste on select', 'Paste straight into the focused field (sends Ctrl+V)')}
         ${switchRow('showInTaskbar', s.showInTaskbar, 'Show in taskbar', 'Give the window a taskbar button so it minimises to the taskbar. Off: a taskbar-less popup.')}
         ${switchRow('windowFrame', s.windowFrame, 'Taskbar window', 'On: a normal window with a taskbar entry. Off: floating always-on-top popup that hides on focus loss. Restart to apply.')}
+        ${switchRow('showPinnedInHistory', s.showPinnedInHistory, 'Show pinned items in history', 'Show pinned items at the top of the All tab. Off: pinned items appear only in the Pinned tab.')}
 
         <div class="s-section">Files</div>
         <div class="s-row">
@@ -359,6 +360,7 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         autoPaste: roleOn('autoPaste'),
         showInTaskbar: roleOn('showInTaskbar'),
         windowFrame: roleOn('windowFrame'),
+        showPinnedInHistory: roleOn('showPinnedInHistory'),
       };
       try {
         const saved = await deps.save(out);

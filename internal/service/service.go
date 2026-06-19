@@ -761,6 +761,7 @@ func (s *Service) GetSettings() (clipboard.Settings, error) {
 	out.AutoPaste = get("auto_paste", boolStr(def.AutoPaste)) == "1"
 	out.ShowInTaskbar = get("show_in_taskbar", boolStr(def.ShowInTaskbar)) == "1"
 	out.SaveFolder = get("save_folder", def.SaveFolder)
+	out.ShowPinnedInHistory = get("show_pinned_in_history", boolStr(def.ShowPinnedInHistory)) == "1"
 	if strings.TrimSpace(out.SaveFolder) == "" {
 		out.SaveFolder = defaultSaveFolder()
 	}
@@ -832,6 +833,9 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 		return prev, err
 	}
 	if err := put("save_folder", strings.TrimSpace(in.SaveFolder)); err != nil {
+		return prev, err
+	}
+	if err := put("show_pinned_in_history", boolStr(in.ShowPinnedInHistory)); err != nil {
 		return prev, err
 	}
 	if s.hotkeyMgr != nil && in.Hotkey != prev.Hotkey {

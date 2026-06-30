@@ -2,7 +2,7 @@
 Type=Application
 Name=clipd
 GenericName=Clipboard History
-Comment=Lightweight clipboard history (auto-start)
+Comment=Start clipd in the background
 Exec=/usr/bin/clipd start
 Icon=clipd
 Terminal=false

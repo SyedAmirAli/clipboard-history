@@ -34,7 +34,6 @@ type Settings struct {
 	KeepImages  bool   `json:"keepImages"`
 	MaxImageMB  int    `json:"maxImageMB"`
 	Theme       string `json:"theme"`
-	Autostart   bool   `json:"autostart"`
 	HideOnBlur  bool   `json:"hideOnBlur"`
 	LaunchAtTop bool   `json:"launchAtTop"`
 	// WindowFrame, when true, runs clipd as a normal decorated window with
@@ -56,7 +55,6 @@ func DefaultSettings() Settings {
 		KeepImages:  true,
 		MaxImageMB:  5,
 		Theme:       "auto",
-		Autostart:   false,
 		HideOnBlur:  true,
 		LaunchAtTop: false,
 		WindowFrame: true,

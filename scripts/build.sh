@@ -20,8 +20,24 @@ export PATH="/usr/local/go/bin:${HOME}/go/bin:${PATH}"
 export GOCACHE="${GOCACHE:-/tmp/clipd-go-cache}"
 export GOMODCACHE="${GOMODCACHE:-/tmp/clipd-go-mod}"
 
-echo "==> Building clipd binary (webkit2_41 build tag for modern Ubuntu/Mint)"
-wails build -tags webkit2_41 -clean -ldflags="-s -w"
+# Wails links GTK/WebKit via cgo. If cgo is off (CGO_ENABLED=0 in `go env`) or
+# no C compiler is installed, Go silently drops every `import "C"` file and the
+# build dies with confusing "undefined" errors. Force cgo on and fail fast with
+# a clear message if there's no compiler to honour it.
+export CGO_ENABLED=1
+if ! command -v "${CC:-cc}" >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1; then
+  echo "error: no C compiler found (need gcc/cc for cgo — GTK/WebKit)." >&2
+  echo "       install it with: sudo apt install build-essential" >&2
+  exit 1
+fi
+
+# Single source of truth for the version: wails.json's productVersion. Inject
+# it into the binary so `clipd --version` matches the packaged release.
+VERSION="$(sed -n 's/.*"productVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' wails.json)"
+VERSION="${VERSION:-dev}"
+
+echo "==> Building clipd binary v${VERSION} (webkit2_41 build tag for modern Ubuntu/Mint)"
+wails build -tags webkit2_41 -clean -ldflags="-s -w -X main.version=${VERSION}"
 
 echo "==> Binary size:"
 ls -lh ./build/bin/clipd | awk '{print "    " $5 "  " $9}'

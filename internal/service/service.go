@@ -21,12 +21,11 @@ import (
 
 	"clipd/internal/clipboard"
 	"clipd/internal/db"
-	"clipd/internal/thumbnail"
 	"clipd/internal/vault"
+	"clipd/internal/x11hint"
 )
 
-// EventNewItem is the Wails event published whenever a new clipboard
-// entry is stored. Frontend subscribers can refresh their list.
+// EventNewItem asks the frontend to refresh its list from the database.
 const EventNewItem = "clipboard:new-item"
 
 // EventCleared is published after the user clears the history.
@@ -38,7 +37,6 @@ const EventVaultChanged = "vault:changed"
 const (
 	vaultSettingsKey      = "private_vault"
 	vaultInactivityPeriod = 5 * time.Minute
-	vaultSuppressTTL      = 2 * time.Minute
 )
 
 // HotkeySetter abstracts the hotkey manager so the service can update
@@ -47,38 +45,22 @@ type HotkeySetter interface {
 	Register(spec string) error
 }
 
-// WatcherSuppressor lets the service tell the watcher to ignore the
-// very next clipboard change matching a known hash — used when pasting
-// a history item so it doesn't bounce back through the watcher.
-type WatcherSuppressor interface {
-	Suppress(hash string)
-}
-
-// AutostartManager toggles the freedesktop autostart .desktop entry.
-type AutostartManager interface {
-	SetEnabled(enabled bool) error
-	IsEnabled() (bool, error)
-}
-
 // Service is bound onto the Wails runtime. All methods are JS-callable.
 type Service struct {
-	store         *db.Store
-	hotkeyMgr     HotkeySetter
-	suppressor    WatcherSuppressor
-	autostart     AutostartManager
-	visible       atomic.Bool
-	ctx           context.Context
-	settingsLog   atomic.Value // last loaded clipboard.Settings, for hotkey diffing
-	vaultMu       sync.Mutex
-	vaultKey      []byte
-	vaultExpiry   time.Time
-	pendingSetup  *vault.SetupBundle
-	vaultSuppress map[string]time.Time
+	store        *db.Store
+	hotkeyMgr    HotkeySetter
+	visible      atomic.Bool
+	ctx          context.Context
+	settingsLog  atomic.Value // last loaded clipboard.Settings, for hotkey diffing
+	vaultMu      sync.Mutex
+	vaultKey     []byte
+	vaultExpiry  time.Time
+	pendingSetup *vault.SetupBundle
 }
 
 // New constructs a Service with all wiring dependencies.
-func New(store *db.Store, hk HotkeySetter, sup WatcherSuppressor, as AutostartManager) *Service {
-	return &Service{store: store, hotkeyMgr: hk, suppressor: sup, autostart: as, vaultSuppress: map[string]time.Time{}}
+func New(store *db.Store, hk HotkeySetter) *Service {
+	return &Service{store: store, hotkeyMgr: hk}
 }
 
 // AttachContext is called from Wails OnStartup so subsequent Show/Hide
@@ -88,55 +70,6 @@ func (s *Service) AttachContext(ctx context.Context) { s.ctx = ctx }
 // Context exposes the Wails context for collaborators (e.g. tray) that
 // need to emit events or control the window from outside the JS bridge.
 func (s *Service) Context() context.Context { return s.ctx }
-
-// ----- Clipboard ingestion (called from main, NOT from JS) -----
-
-// IngestText is invoked by the main loop whenever the X11 watcher
-// reports a new text payload. It stores the item, enforces the
-// max-items cap, and publishes a refresh event to the UI.
-func (s *Service) IngestText(text, hash string) error {
-	if s.isVaultSuppressed(hash) {
-		return nil
-	}
-	settings := s.CurrentSettings()
-	res, err := s.store.AddText(text, hash)
-	if err != nil {
-		return err
-	}
-	if res.IsNew {
-		_, _ = s.store.TrimToMax(settings.MaxItems)
-	}
-	s.emitNewItem()
-	return nil
-}
-
-// IngestImage is invoked by the main loop for image clipboard payloads.
-// It auto-rejects images larger than the user-configured cap.
-func (s *Service) IngestImage(png []byte, hash string) error {
-	if s.isVaultSuppressed(hash) {
-		return nil
-	}
-	settings := s.CurrentSettings()
-	if !settings.KeepImages {
-		return nil
-	}
-	if settings.MaxImageMB > 0 && len(png) > settings.MaxImageMB*1024*1024 {
-		return fmt.Errorf("image %d bytes exceeds %d MB cap", len(png), settings.MaxImageMB)
-	}
-	thumb, w, h, err := thumbnail.DataURL(png)
-	if err != nil {
-		return err
-	}
-	res, err := s.store.AddImage(png, thumb, hash, w, h)
-	if err != nil {
-		return err
-	}
-	if res.IsNew {
-		_, _ = s.store.TrimToMax(settings.MaxItems)
-	}
-	s.emitNewItem()
-	return nil
-}
 
 func (s *Service) emitNewItem() {
 	if s.ctx == nil {
@@ -170,8 +103,7 @@ func (s *Service) ListItems(filter string, limit int) ([]clipboard.Item, error) 
 	return items, nil
 }
 
-// writeToClipboard puts a stored item onto the X11 CLIPBOARD selection,
-// suppressing the watcher so our own write isn't re-ingested as a new entry.
+// writeToClipboard puts a stored item onto the Wayland clipboard.
 func (s *Service) writeToClipboard(id int64) error {
 	ct, text, blob, err := s.store.GetForPaste(id)
 	if err != nil {
@@ -179,10 +111,8 @@ func (s *Service) writeToClipboard(id int64) error {
 	}
 	switch ct {
 	case clipboard.ContentTypeText:
-		s.suppressor.Suppress("t:" + sumHex([]byte(text)))
 		return clipboard.WriteText(text)
 	case clipboard.ContentTypeImage:
-		s.suppressor.Suppress("i:" + sumHex(blob))
 		return clipboard.WriteImagePNG(blob)
 	default:
 		return fmt.Errorf("unknown content_type: %s", ct)
@@ -226,18 +156,10 @@ func (s *Service) PinItem(id int64, pinned bool) error {
 	return s.store.SetPinned(id, pinned)
 }
 
-// DeleteItem removes a single history entry. It suppresses the watcher with
-// the deleted item's hash so that, if that content is still on the clipboard,
-// the next poll doesn't re-ingest and resurrect the entry.
+// DeleteItem removes a single history entry.
 func (s *Service) DeleteItem(id int64) error {
-	hash, err := s.store.Delete(id)
-	if err != nil {
-		return err
-	}
-	if hash != "" {
-		s.suppressor.Suppress(hash)
-	}
-	return nil
+	_, err := s.store.Delete(id)
+	return err
 }
 
 // ----- Private Vault -----
@@ -445,12 +367,8 @@ func (s *Service) MoveItemToVault(id int64) error {
 	if _, err := s.store.AddVaultEntry(full.Item.ContentType, payload, nonce, full.Item.ContentHash); err != nil {
 		return err
 	}
-	hash, err := s.store.Delete(id)
-	if err != nil {
+	if _, err := s.store.Delete(id); err != nil {
 		return err
-	}
-	if hash != "" {
-		s.suppressVaultHash(hash)
 	}
 	s.emitNewItem()
 	s.emitVaultChanged()
@@ -472,12 +390,8 @@ func (s *Service) CopyVaultItem(id int64) error {
 	}
 	switch clipboard.ContentType(plain.ContentType) {
 	case clipboard.ContentTypeText:
-		hash := vault.HashText(plain.Text)
-		s.suppressVaultHash(hash)
 		return clipboard.WriteText(plain.Text)
 	case clipboard.ContentTypeImage:
-		hash := vault.HashImage(plain.ImagePNG)
-		s.suppressVaultHash(hash)
 		return clipboard.WriteImagePNG(plain.ImagePNG)
 	default:
 		return fmt.Errorf("unknown vault content_type: %s", plain.ContentType)
@@ -571,11 +485,6 @@ func (s *Service) GetSettings() (clipboard.Settings, error) {
 	out.LaunchAtTop = get("launch_at_top", boolStr(def.LaunchAtTop)) == "1"
 	out.WindowFrame = get("window_frame", boolStr(def.WindowFrame)) == "1"
 	out.AutoPaste = get("auto_paste", boolStr(def.AutoPaste)) == "1"
-	if s.autostart != nil {
-		if v, err := s.autostart.IsEnabled(); err == nil {
-			out.Autostart = v
-		}
-	}
 	s.settingsLog.Store(out)
 	return out, nil
 }
@@ -591,8 +500,7 @@ func (s *Service) CurrentSettings() clipboard.Settings {
 	return v
 }
 
-// UpdateSettings persists a Settings struct and reapplies side-effects
-// (hotkey re-registration, autostart toggle).
+// UpdateSettings persists a Settings struct and reapplies GUI side-effects.
 func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, error) {
 	prev, _ := s.GetSettings()
 	if in.MaxItems <= 0 {
@@ -638,11 +546,6 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 	if s.hotkeyMgr != nil && in.Hotkey != prev.Hotkey {
 		if err := s.hotkeyMgr.Register(in.Hotkey); err != nil {
 			return prev, fmt.Errorf("re-register hotkey: %w", err)
-		}
-	}
-	if s.autostart != nil && in.Autostart != prev.Autostart {
-		if err := s.autostart.SetEnabled(in.Autostart); err != nil {
-			return prev, fmt.Errorf("update autostart: %w", err)
 		}
 	}
 	s.settingsLog.Store(in)
@@ -775,39 +678,6 @@ func normalizeVaultTitle(title string) string {
 	return title
 }
 
-func (s *Service) suppressVaultHash(hash string) {
-	if hash == "" {
-		return
-	}
-	if s.suppressor != nil {
-		s.suppressor.Suppress(hash)
-	}
-	s.vaultMu.Lock()
-	defer s.vaultMu.Unlock()
-	s.vaultSuppress[hash] = time.Now().Add(vaultSuppressTTL)
-}
-
-func (s *Service) isVaultSuppressed(hash string) bool {
-	if hash == "" {
-		return false
-	}
-	now := time.Now()
-	s.vaultMu.Lock()
-	defer s.vaultMu.Unlock()
-	for h, until := range s.vaultSuppress {
-		if now.After(until) {
-			delete(s.vaultSuppress, h)
-		}
-	}
-	until, ok := s.vaultSuppress[hash]
-	if !ok || now.After(until) {
-		delete(s.vaultSuppress, hash)
-		return false
-	}
-	delete(s.vaultSuppress, hash)
-	return true
-}
-
 // ----- Window control -----
 
 // ShowPopup brings the popup window to the foreground.
@@ -815,6 +685,7 @@ func (s *Service) ShowPopup() {
 	if s.ctx == nil {
 		return
 	}
+	clipboard.RememberPasteTarget()
 	wailsruntime.WindowShow(s.ctx)
 	wailsruntime.WindowUnminimise(s.ctx) // restore if minimised to the taskbar
 	// In windowed mode the user owns the window position and stacking, so we
@@ -824,6 +695,18 @@ func (s *Service) ShowPopup() {
 		wailsruntime.WindowSetAlwaysOnTop(s.ctx, true)
 		wailsruntime.WindowCenter(s.ctx)
 	}
+	// A programmatic show gets no input timestamp, so GNOME denies focus and
+	// flags the window "demands attention" — which pulses the dock icon and
+	// pops a "ready" toast every time. Activating it (under XWayland) once it's
+	// mapped clears that flag and hands the popup keyboard focus.
+	go func() {
+		time.Sleep(120 * time.Millisecond)
+		x11hint.Nudge()
+	}()
+	// The clipboard watcher runs in the separate clipd-watch process, so this GUI
+	// doesn't learn about new items live. Refresh the list every time the popup
+	// is shown so it reflects whatever the worker has captured.
+	s.emitNewItem()
 	s.visible.Store(true)
 }
 

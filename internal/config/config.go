@@ -45,24 +45,6 @@ func ConfigDir() (string, error) {
 	return dir, nil
 }
 
-// AutostartDir returns the freedesktop autostart directory under
-// $XDG_CONFIG_HOME/autostart. The directory is created if it doesn't exist.
-func AutostartDir() (string, error) {
-	base := os.Getenv("XDG_CONFIG_HOME")
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		base = filepath.Join(home, ".config")
-	}
-	dir := filepath.Join(base, "autostart")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	return dir, nil
-}
-
 // DBPath returns the absolute path to the SQLite database file.
 func DBPath() (string, error) {
 	dir, err := DataDir()
@@ -70,15 +52,6 @@ func DBPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "clipd.db"), nil
-}
-
-// AutostartFilePath returns the path to the user's autostart .desktop entry.
-func AutostartFilePath() (string, error) {
-	dir, err := AutostartDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, AppName+".desktop"), nil
 }
 
 // SocketPath returns the path to the Unix domain socket used for

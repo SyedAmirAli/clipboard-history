@@ -10,23 +10,14 @@ import (
 	"clipd/internal/vault"
 )
 
-type fakeSuppressor struct {
-	hashes []string
-}
-
-func (f *fakeSuppressor) Suppress(hash string) {
-	f.hashes = append(f.hashes, hash)
-}
-
-func newTestService(t *testing.T) (*Service, *db.Store, *fakeSuppressor) {
+func newTestService(t *testing.T) (*Service, *db.Store) {
 	t.Helper()
 	store, err := db.Open(filepath.Join(t.TempDir(), "clipd.db"))
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	sup := &fakeSuppressor{}
-	svc := New(store, nil, sup, nil)
-	return svc, store, sup
+	svc := New(store, nil)
+	return svc, store
 }
 
 func setupVault(t *testing.T, svc *Service, pin string) {
@@ -49,7 +40,7 @@ func setupVault(t *testing.T, svc *Service, pin string) {
 }
 
 func TestVaultSetupRequiresMatchingPINAndValidCode(t *testing.T) {
-	svc, store, _ := newTestService(t)
+	svc, store := newTestService(t)
 	defer store.Close()
 
 	bundle, err := svc.StartVaultSetup()
@@ -76,7 +67,7 @@ func TestVaultSetupRequiresMatchingPINAndValidCode(t *testing.T) {
 }
 
 func TestVaultUnlockWithPINAndAuthenticatorCode(t *testing.T) {
-	svc, store, _ := newTestService(t)
+	svc, store := newTestService(t)
 	defer store.Close()
 	setupVault(t, svc, "old-pin")
 
@@ -107,7 +98,7 @@ func TestVaultUnlockWithPINAndAuthenticatorCode(t *testing.T) {
 }
 
 func TestVaultResetPINInvalidatesOldPIN(t *testing.T) {
-	svc, store, _ := newTestService(t)
+	svc, store := newTestService(t)
 	defer store.Close()
 	setupVault(t, svc, "old-pin")
 
@@ -136,7 +127,7 @@ func TestVaultResetPINInvalidatesOldPIN(t *testing.T) {
 }
 
 func TestMoveToVaultEncryptsAndRemovesNormalHistory(t *testing.T) {
-	svc, store, sup := newTestService(t)
+	svc, store := newTestService(t)
 	defer store.Close()
 	setupVault(t, svc, "pin")
 
@@ -169,13 +160,10 @@ func TestMoveToVaultEncryptsAndRemovesNormalHistory(t *testing.T) {
 	if string(payload) == "secret text" {
 		t.Fatal("vault payload was stored in plaintext")
 	}
-	if len(sup.hashes) == 0 || sup.hashes[len(sup.hashes)-1] != vault.HashText("secret text") {
-		t.Fatalf("move did not suppress original hash: %+v", sup.hashes)
-	}
 }
 
 func TestMoveToVaultFailsWhenLocked(t *testing.T) {
-	svc, store, _ := newTestService(t)
+	svc, store := newTestService(t)
 	defer store.Close()
 	setupVault(t, svc, "pin")
 	added, err := store.AddText("secret text", vault.HashText("secret text"))
@@ -195,25 +183,8 @@ func TestMoveToVaultFailsWhenLocked(t *testing.T) {
 	}
 }
 
-func TestVaultSuppressedHashIsNotReingested(t *testing.T) {
-	svc, store, _ := newTestService(t)
-	defer store.Close()
-	hash := vault.HashText("secret text")
-	svc.suppressVaultHash(hash)
-	if err := svc.IngestText("secret text", hash); err != nil {
-		t.Fatalf("ingest: %v", err)
-	}
-	items, err := svc.ListItems("", 20)
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(items) != 0 {
-		t.Fatalf("suppressed vault copy was ingested: %+v", items)
-	}
-}
-
-func TestRevealVaultItemReturnsTextAndCopyRemainsSuppressed(t *testing.T) {
-	svc, store, _ := newTestService(t)
+func TestRevealVaultItemReturnsText(t *testing.T) {
+	svc, store := newTestService(t)
 	defer store.Close()
 	setupVault(t, svc, "pin")
 
@@ -238,21 +209,10 @@ func TestRevealVaultItemReturnsTextAndCopyRemainsSuppressed(t *testing.T) {
 	if revealed.Text != "secret text" {
 		t.Fatalf("unexpected revealed text: %q", revealed.Text)
 	}
-	svc.suppressVaultHash(vault.HashText(revealed.Text))
-	if err := svc.IngestText(revealed.Text, vault.HashText(revealed.Text)); err != nil {
-		t.Fatalf("ingest copied vault text: %v", err)
-	}
-	items, err := svc.ListItems("", 20)
-	if err != nil {
-		t.Fatalf("list normal: %v", err)
-	}
-	if len(items) != 0 {
-		t.Fatalf("copied vault item was reingested into normal history: %+v", items)
-	}
 }
 
 func TestUpdateVaultItemTitlePersistsEncryptedTitle(t *testing.T) {
-	svc, store, _ := newTestService(t)
+	svc, store := newTestService(t)
 	defer store.Close()
 	setupVault(t, svc, "pin")
 
@@ -300,7 +260,7 @@ func TestUpdateVaultItemTitlePersistsEncryptedTitle(t *testing.T) {
 }
 
 func TestVaultAutoLocksAfterInactivity(t *testing.T) {
-	svc, store, _ := newTestService(t)
+	svc, store := newTestService(t)
 	defer store.Close()
 	setupVault(t, svc, "pin")
 

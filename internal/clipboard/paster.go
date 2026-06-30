@@ -2,38 +2,71 @@ package clipboard
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
-	"syscall"
+	"strings"
+	"sync"
+	"time"
 )
 
-// SendPaste synthesises a Ctrl+V key event into whatever window currently
-// holds keyboard focus, using xdotool. clipd calls this right after it copies
-// a selected history item and hides itself, so the value lands directly in the
-// field the user was editing — no manual Ctrl+V needed.
-//
-// It is best-effort: the clipboard has already been written by the time this
-// runs, so if xdotool is missing we just return an error for the caller to log
-// and the user can still paste manually.
+var pasteTarget struct {
+	sync.Mutex
+	window string
+}
+
+// RememberPasteTarget records the active X11/XWayland window before clipd takes
+// focus. On native Wayland applications, xdotool cannot see or control the
+// focused surface, so this remains a best-effort feature.
+func RememberPasteTarget() {
+	if os.Getenv("DISPLAY") == "" {
+		return
+	}
+	out, err := exec.Command("xdotool", "getactivewindow").Output()
+	if err != nil {
+		return
+	}
+	id := strings.TrimSpace(string(out))
+	if id == "" || isClipdWindow(id) {
+		return
+	}
+	pasteTarget.Lock()
+	pasteTarget.window = id
+	pasteTarget.Unlock()
+}
+
+// SendPaste activates the remembered window and sends Ctrl+V after the selected
+// item has been written to the clipboard. This works for X11/XWayland clients.
+// GNOME Wayland intentionally blocks arbitrary input injection into native
+// Wayland windows; supporting those would require a privileged virtual-input
+// daemon such as ydotool, which is outside clipd's normal app boundary.
 func SendPaste() error {
-	// Wayland forbids arbitrary clients from synthesising input into other
-	// windows (there is no portable xdotool equivalent that works across
-	// GNOME, KDE and wlroots). The item is already on the clipboard by the
-	// time this runs, so we simply skip auto-paste and let the user press
-	// Ctrl+V themselves.
-	if IsWayland() {
+	if os.Getenv("DISPLAY") == "" {
 		return nil
 	}
-	path, err := exec.LookPath("xdotool")
-	if err != nil {
-		return fmt.Errorf("xdotool not found in PATH: install it with 'sudo apt install xdotool' to enable auto-paste")
+	if _, err := exec.LookPath("xdotool"); err != nil {
+		return fmt.Errorf("xdotool not found; install xdotool or turn off Auto-paste")
 	}
-	// --clearmodifiers ensures any modifier the user is still physically
-	// holding (e.g. the Super of the open-shortcut) doesn't corrupt the chord.
-	cmd := exec.Command(path, "key", "--clearmodifiers", "ctrl+v")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start xdotool: %w", err)
+	target := rememberedPasteTarget()
+	if target != "" {
+		_ = exec.Command("xdotool", "windowactivate", "--sync", target).Run()
+		time.Sleep(80 * time.Millisecond)
 	}
-	go func() { _ = cmd.Wait() }() // best-effort reap
+	if err := exec.Command("xdotool", "key", "--clearmodifiers", "ctrl+v").Run(); err != nil {
+		return fmt.Errorf("send Ctrl+V: %w", err)
+	}
 	return nil
+}
+
+func rememberedPasteTarget() string {
+	pasteTarget.Lock()
+	defer pasteTarget.Unlock()
+	return pasteTarget.window
+}
+
+func isClipdWindow(id string) bool {
+	out, err := exec.Command("xdotool", "getwindowclassname", id).Output()
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(string(out)), "clipd")
 }

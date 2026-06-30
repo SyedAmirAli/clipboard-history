@@ -8,14 +8,14 @@
 name: clipd
 arch: amd64
 platform: linux
-version: "1.1.6"
+version: "1.1.23"
 section: utils
 priority: optional
 maintainer: "Syed Amir Ali <sywmohammadamir@gmail.com>"
 description: |
-  Lightweight clipboard history manager for Linux (X11 and Wayland).
+  Lightweight clipboard history manager for Linux (Wayland).
   Captures text and image clipboard contents, supports pinning, search,
-  a global hotkey (default Super+V), system tray, and a configurable
+  a global shortcut (default Super+V), system tray, and a configurable
   max history size. Includes an encrypted Private Vault for sensitive
   items. Inspired by Windows' Win+V panel.
 vendor: "clipd"
@@ -26,16 +26,20 @@ depends:
   - libgtk-3-0
   - libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
   - libayatana-appindicator3-1
-  - libx11-6
-  # X11 backend (xclip/xdotool) and Wayland backend (wl-clipboard) are both
-  # pulled in: clipd is a single binary that picks the right one at runtime
-  # depending on the session, so both must be available.
-  - xclip
-  - xdotool
+  # libx11-6 is still pulled in transitively by webkit2gtk (it links X11 for
+  # XWayland), so we don't depend on it directly any more.
+  # clipd is Wayland-only and captures/sets the clipboard via wl-clipboard
+  # (wl-paste / wl-copy).
   - wl-clipboard
+  - python3
 
 recommends:
   - libnotify-bin
+  # Used (only under XWayland) to keep clipd out of the taskbar and to focus
+  # the popup on show so GNOME stops pulsing the dock / showing "ready" toasts.
+  # xdotool provides window search + activate; x11-utils provides xprop.
+  - xdotool
+  - x11-utils
 
 contents:
   - src: ./build/bin/clipd
@@ -48,13 +52,26 @@ contents:
     file_info:
       mode: 0644
 
+  - src: ./build/linux/clipd-watcher/main.py
+    dst: /opt/clipd-watcher/main.py
+    file_info:
+      mode: 0755
+
+  - src: ./build/linux/gnome-extension/clipd-watcher@syedamirali/metadata.json
+    dst: /usr/share/gnome-shell/extensions/clipd-watcher@syedamirali/metadata.json
+    file_info:
+      mode: 0644
+
+  - src: ./build/linux/gnome-extension/clipd-watcher@syedamirali/extension.js
+    dst: /usr/share/gnome-shell/extensions/clipd-watcher@syedamirali/extension.js
+    file_info:
+      mode: 0644
+
   - src: ./build/linux/clipd.desktop
     dst: /usr/share/applications/clipd.desktop
     file_info:
       mode: 0644
 
-  # System-wide autostart: launches clipd on login for every user. The
-  # in-app autostart toggle layers a per-user override on top of this.
   - src: ./build/linux/clipd-autostart.desktop
     dst: /etc/xdg/autostart/clipd.desktop
     file_info:

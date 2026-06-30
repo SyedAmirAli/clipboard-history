@@ -321,6 +321,15 @@ textarea {
   height: 16px;
 }
 
+/* Spin the refresh icon briefly when the list is manually refreshed. */
+.refresh-btn.spin svg {
+  animation: clipd-spin 0.5s linear;
+}
+@keyframes clipd-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Settings button — accent tinted, sits outside the search bar */
 .settings-btn {
   width: 30px;

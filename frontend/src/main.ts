@@ -29,6 +29,7 @@ const els = {
     toast: $<HTMLElement>("#toast"),
     openSettings: $<HTMLButtonElement>("#open-settings"),
     openVault: $<HTMLButtonElement>("#open-vault"),
+    refreshList: $<HTMLButtonElement>("#refresh-list"),
     winClose: $<HTMLButtonElement>("#win-close"),
     winMin: $<HTMLButtonElement>("#win-min"),
     winMax: $<HTMLButtonElement>("#win-max"),
@@ -162,6 +163,13 @@ els.list.addEventListener("keydown", (e) => list.handleKey(e));
 
 els.openSettings.addEventListener("click", () => settings.open());
 els.openVault.addEventListener("click", () => vaultPanel.open());
+// The clipboard watcher runs in the separate clipd-watch process, so manual refresh re-reads
+// the DB on demand (the list also auto-refreshes whenever the popup is shown).
+els.refreshList.addEventListener("click", () => {
+    void refresh();
+    els.refreshList.classList.add("spin");
+    window.setTimeout(() => els.refreshList.classList.remove("spin"), 500);
+});
 
 // Tiny credit bar: open developer portfolio / GitHub repo in system browser.
 // Falls back to copying the URL onto the clipboard if the browser can't be
@@ -216,14 +224,31 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
+// Track whether the popup has actually held keyboard focus. On Wayland a
+// frameless always-on-top popup is frequently shown WITHOUT the compositor
+// granting it focus, which fires a spurious `blur` immediately after it
+// appears — the old handler then hid the window ~150ms later, so it looked
+// like it "opened and instantly closed". We only auto-hide on blur once the
+// window has genuinely been focused, so that phantom blur is ignored.
+let popupHadFocus = false;
+window.addEventListener("focus", () => {
+    popupHadFocus = true;
+});
+
 window.addEventListener("blur", () => {
     if (currentSettings?.windowFrame) return; // windowed mode lives in the taskbar
     if (currentSettings?.hideOnBlur === false) return;
     if (settings.isOpen()) return;
     if (vaultPanel.isOpen()) return;
     if (!els.ctxMenu.classList.contains("hidden")) return;
-    // Slight delay so click-to-paste flow finishes first.
-    setTimeout(() => api.hidePopup().catch(() => undefined), 150);
+    if (!popupHadFocus) return; // never focused (Wayland) → this blur is spurious
+    // Slight delay so click-to-paste flow finishes first; re-check focus in
+    // case the window regained it during the grace window.
+    setTimeout(() => {
+        if (document.hasFocus()) return;
+        popupHadFocus = false; // require a fresh focus before the next auto-hide
+        api.hidePopup().catch(() => undefined);
+    }, 150);
 });
 
 // React to backend pushes.

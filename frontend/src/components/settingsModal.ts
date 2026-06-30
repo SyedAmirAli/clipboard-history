@@ -180,7 +180,6 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         </div>
 
         <div class="s-section">Behaviour</div>
-        ${switchRow('autostart', s.autostart, 'Auto-start on login', '~/.config/autostart/clipd.desktop')}
         ${switchRow('hideOnBlur', s.hideOnBlur, 'Hide on focus loss', 'Auto-close popup when clicked away')}
         ${switchRow('launchAtTop', s.launchAtTop, 'Launch at screen top', 'Position the popup near the top of the screen')}
         ${switchRow('autoPaste', s.autoPaste, 'Auto-paste on select', 'Paste straight into the focused field (sends Ctrl+V via xdotool)')}
@@ -300,7 +299,6 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         maxImageMB: Number((root.querySelector('#s-max-mb') as HTMLInputElement).value) || current.maxImageMB,
         theme: (themeOpt?.dataset.val as AppSettings['theme']) ?? current.theme,
         keepImages: roleOn('keepImages'),
-        autostart: roleOn('autostart'),
         hideOnBlur: roleOn('hideOnBlur'),
         launchAtTop: roleOn('launchAtTop'),
         autoPaste: roleOn('autoPaste'),

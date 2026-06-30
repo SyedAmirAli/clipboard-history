@@ -24,7 +24,6 @@ export interface AppSettings {
   keepImages: boolean;
   maxImageMB: number;
   theme: 'light' | 'dark' | 'auto';
-  autostart: boolean;
   hideOnBlur: boolean;
   launchAtTop: boolean;
   windowFrame: boolean;

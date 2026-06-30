@@ -10,10 +10,33 @@ package shortcut
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
 )
+
+// Manager adapts the desktop-shortcut mechanism to the service's
+// HotkeySetter interface. Under Wayland a client cannot grab a global key
+// for itself, so "registering" a hotkey means installing a desktop binding
+// (GNOME via gsettings) that runs `clipd toggle`. Replacing the old in-process
+// X11 grab, Manager is the single hotkey path now that clipd is Wayland-only.
+type Manager struct{}
+
+// NewManager returns a shortcut Manager.
+func NewManager() *Manager { return &Manager{} }
+
+// Register installs (or updates) the desktop binding for spec. On desktops we
+// can't automate (non-GNOME), it logs guidance and returns nil rather than
+// failing — the user binds `clipd toggle` themselves, and a settings save
+// shouldn't error just because we can't write the binding for them.
+func (m *Manager) Register(spec string) error {
+	if !Available() {
+		log.Printf("shortcut: automatic install unavailable on this desktop; bind %q to \"clipd toggle\" manually", spec)
+		return nil
+	}
+	return EnsureInstalled(spec)
+}
 
 // keybindingPath is the dedicated GSettings relocatable path clipd owns. We
 // namespace it under our own name so we never clobber a user's existing
@@ -62,10 +85,14 @@ func EnsureInstalled(spec string) error {
 	}
 
 	rel := keybindingSchema + ":" + keybindingPath
-	if err := gsettingsSet(rel, "name", "clipd toggle"); err != nil {
+	if err := gsettingsSet(rel, "name", "clipd"); err != nil {
 		return err
 	}
-	if err := gsettingsSet(rel, "command", clipdCommand()+" toggle"); err != nil {
+	// Bind bare `clipd` (not `clipd toggle`): the first press launches the GUI
+	// and shows it; later presses toggle the already-running window. `clipd
+	// toggle` would fail on the first press because, in the daemon model, only
+	// the headless daemon is running at login — the GUI hasn't started yet.
+	if err := gsettingsSet(rel, "command", clipdCommand()); err != nil {
 		return err
 	}
 	if err := gsettingsSet(rel, "binding", accel); err != nil {

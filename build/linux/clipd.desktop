@@ -9,3 +9,6 @@ Terminal=false
 Categories=Utility;Office;
 Keywords=clipboard;copy;paste;history;
 StartupNotify=false
+# Pin the running window (WM_CLASS "clipd"/"Clipd") to this .desktop so GNOME's
+# dock shows "clipd" + the raccoon icon instead of a generic "Unknown" entry.
+StartupWMClass=clipd

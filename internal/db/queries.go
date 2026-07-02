@@ -221,6 +221,50 @@ func (s *Store) ListAllFull() ([]FullItem, error) {
 	return out, rows.Err()
 }
 
+// ListBackupItems returns the rows a backup should contain: non-pinned rows
+// touched within the window (created or last used at/after cutoff), plus —
+// when includePinned is set — every pinned row regardless of the window
+// (pinned items are few and durable). Ordered pinned-first, then recency.
+func (s *Store) ListBackupItems(cutoff int64, includePinned bool) ([]FullItem, error) {
+	where := `pinned = 0 AND (created_at >= ? OR last_used_at >= ?)`
+	if includePinned {
+		where = `pinned = 1 OR (` + where + `)`
+	}
+	rows, err := s.db.Query(`
+		SELECT id, content_type, text_content, image_blob, COALESCE(image_thumb,''),
+		       image_w, image_h, content_hash, pinned, created_at, last_used_at
+		FROM items
+		WHERE `+where+`
+		ORDER BY pinned DESC, last_used_at DESC
+	`, cutoff, cutoff)
+	if err != nil {
+		return nil, fmt.Errorf("list backup query: %w", err)
+	}
+	defer rows.Close()
+	var out []FullItem
+	for rows.Next() {
+		var it FullItem
+		var pinned int
+		var text sql.NullString
+		if err := rows.Scan(&it.Item.ID, &it.Item.ContentType, &text, &it.ImageBlob, &it.Item.ImageThumb,
+			&it.Item.ImageW, &it.Item.ImageH, &it.Item.ContentHash, &pinned, &it.Item.CreatedAt, &it.Item.LastUsedAt); err != nil {
+			return nil, fmt.Errorf("scan backup row: %w", err)
+		}
+		it.Item.TextContent = text.String
+		it.Item.Pinned = pinned == 1
+		it.Item.Preview = makePreview(it.Item)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// CountItems returns the total number of history rows.
+func (s *Store) CountItems() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM items`).Scan(&n)
+	return n, err
+}
+
 // SetPinned toggles the pinned flag for a row.
 func (s *Store) SetPinned(id int64, pinned bool) error {
 	v := 0

@@ -19,6 +19,7 @@ package x11hint
 import (
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -78,6 +79,66 @@ func SuppressTaskbar() {
 			markAll()
 		}
 	}()
+}
+
+// findToplevel returns clipd's managed toplevel X window — the one carrying
+// WM_STATE (the embedded WebKit child has none).
+func findToplevel() string {
+	for _, id := range findWindows() {
+		out, err := exec.Command("xprop", "-id", id, "WM_STATE").Output()
+		if err == nil && strings.Contains(string(out), "WM_STATE(WM_STATE)") {
+			return id
+		}
+	}
+	return ""
+}
+
+// WindowPosition reads the toplevel's absolute position in raw X11
+// coordinates. We deliberately use xdotool instead of GTK here: with mutter's
+// xwayland-native-scaling / scale-monitor-framebuffer features, GTK's idea of
+// the coordinate space diverges from X11's, but xdotool read + move round-trip
+// in the same space exactly.
+func WindowPosition() (int, int, bool) {
+	if !underX11() {
+		return 0, 0, false
+	}
+	id := findToplevel()
+	if id == "" {
+		return 0, 0, false
+	}
+	out, err := exec.Command("xdotool", "getwindowgeometry", "--shell", id).Output()
+	if err != nil {
+		return 0, 0, false
+	}
+	var x, y int
+	var okX, okY bool
+	for _, line := range strings.Split(string(out), "\n") {
+		if v, found := strings.CutPrefix(line, "X="); found {
+			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+				x, okX = n, true
+			}
+		}
+		if v, found := strings.CutPrefix(line, "Y="); found {
+			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+				y, okY = n, true
+			}
+		}
+	}
+	return x, y, okX && okY
+}
+
+// MoveWindow places the toplevel at x,y in raw X11 coordinates (the same
+// space WindowPosition reads), so a saved position restores exactly.
+func MoveWindow(x, y int) bool {
+	if !underX11() {
+		return false
+	}
+	id := findToplevel()
+	if id == "" {
+		return false
+	}
+	return exec.Command("xdotool", "windowmove", id,
+		strconv.Itoa(x), strconv.Itoa(y)).Run() == nil
 }
 
 // Nudge re-marks the window (covering any later hide/show re-map) and activates

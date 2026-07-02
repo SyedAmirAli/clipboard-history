@@ -38,6 +38,7 @@ const els = {
     winMin: $<HTMLButtonElement>("#win-min"),
     winMax: $<HTMLButtonElement>("#win-max"),
     statusCount: $<HTMLElement>("#status-count"),
+    chipsMeta: $<HTMLElement>("#chips-meta"),
 };
 
 type Filter = "all" | "text" | "images" | "pinned";
@@ -86,6 +87,15 @@ const settings = createSettingsModal(els.settings, {
     },
     systemInfo: () => api.systemInfo(),
     chooseDownloadDir: () => api.chooseDownloadDir(),
+    chooseBackupDir: () => api.chooseBackupDir(),
+    backupNow: async () => {
+        try {
+            const path = await api.runBackupNow();
+            if (path) flash(`Backup saved to ${path}`);
+        } catch (err) {
+            flash("Backup failed: " + String(err));
+        }
+    },
     exportVault: doExportVault,
     chrome: { scrim: els.scrim, mainContent: els.mainContent },
     confirm,
@@ -296,6 +306,25 @@ document.addEventListener("keydown", (e) => {
     } else if (e.key === "/" && document.activeElement !== els.searchInput) {
         e.preventDefault();
         search.focus();
+    } else if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", "Enter"].includes(e.key)) {
+        // Arrow-key navigation should work no matter where focus sits (on
+        // show, focus often lands on <body>, not the search input). The
+        // search input forwards its own keys via searchBar; other inputs,
+        // textareas, and buttons keep their native key handling, and any
+        // open overlay handles its own keys.
+        if (settings.isOpen() || vaultPanel.isOpen() || previewModal.isOpen()) return;
+        if (confirm.isOpen() || prompt.isOpen()) return;
+        const t = document.activeElement;
+        if (t === els.searchInput) return; // already forwarded by searchBar
+        if (t === els.list || els.list.contains(t)) return; // list's own listener handles it
+        if (
+            t instanceof HTMLInputElement ||
+            t instanceof HTMLTextAreaElement ||
+            t instanceof HTMLButtonElement ||
+            (t instanceof HTMLElement && t.isContentEditable)
+        )
+            return;
+        list.handleKey(e);
     }
 });
 
@@ -348,7 +377,28 @@ async function refresh() {
     } catch (err) {
         console.error("list items failed", err);
     }
+    void updateStats();
 }
+
+/** Chips-row status: total items in the DB, plus process memory when the
+ *  "Show memory usage" setting is on (opt-in — polling /proc costs power). */
+async function updateStats() {
+    const showMem = currentSettings?.showMemory ?? false;
+    try {
+        const s = await api.runtimeStats(showMem);
+        const mb = (s.rssBytes / (1024 * 1024)).toFixed(1);
+        els.chipsMeta.innerHTML = showMem
+            ? `RAM: <strong>${mb}MB</strong> · <strong>${s.totalItems}</strong> items`
+            : `<strong>${s.totalItems}</strong> items`;
+    } catch {
+        /* bindings unavailable (pure-Vite dev) — leave blank */
+    }
+}
+// Periodic refresh only matters for the live RAM figure; the item count
+// updates with every list refresh anyway.
+window.setInterval(() => {
+    if (currentSettings?.showMemory) void updateStats();
+}, 5000);
 
 /** Apply the active chip filter on top of the backend search result. */
 function applyFilter() {

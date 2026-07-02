@@ -19,6 +19,8 @@ export interface SettingsModalDeps {
   clearAll: (keepPinned: boolean) => Promise<void>;
   systemInfo: () => Promise<SystemInfo>;
   chooseDownloadDir: () => Promise<string>;
+  chooseBackupDir: () => Promise<string>;
+  backupNow: () => Promise<void>;
   exportVault: () => Promise<void>;
   chrome: SettingsChrome;
   confirm: ConfirmDialog;
@@ -186,6 +188,27 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
           <div class="s-hint">Item downloads are saved here. When unset, a save dialog asks every time.</div>
         </div>
 
+        <div class="s-section">Daily Backup</div>
+        ${switchRow('backupEnabled', s.backupEnabled, 'Daily backup', 'Back up the last 24 hours of history to a ZIP once a day')}
+        <div class="s-row">
+          <div class="s-info"><div class="s-lbl">Backup time</div></div>
+          <input class="time-input" id="s-backup-time" type="time" value="${escapeHtml(s.backupTime || '02:00')}" />
+        </div>
+        <div class="s-field">
+          <div class="s-lbl">Backup folder</div>
+          <div class="dl-dir-row">
+            <div class="dl-dir-path ${s.backupDir ? '' : 'empty'}" data-role="backupDir"
+                 title="${escapeHtml(s.backupDir || '')}">${
+                   s.backupDir ? escapeHtml(s.backupDir) : 'No folder selected'
+                 }</div>
+            <button class="s-btn small" data-action="choose-backup-dir">Choose…</button>
+            <button class="s-btn small" data-action="backup-now">Backup now</button>
+          </div>
+        </div>
+        ${switchRow('backupIncludeVault', s.backupIncludeVault, 'Include Private Vault', 'Vault entries go in encrypted as-is — unreadable without your vault password; nothing secret is stored')}
+        ${switchRow('backupIncludePinned', s.backupIncludePinned, 'Include pinned items', 'All pinned items are backed up, even older than 24 hours')}
+        ${switchRow('backupCleanAfter', s.backupCleanAfter, 'Clean recent after backup', 'Delete non-pinned history after a successful backup. Pinned items and the vault are kept.')}
+
         <div class="s-section">Private Vault</div>
         <div class="s-row">
           <div class="s-info">
@@ -205,9 +228,11 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
           </div>
         </div>
 
+        ${switchRow('showMemory', s.showMemory, 'Show memory usage', 'Live RAM figure in the filter row. Uses a little extra power — enable if you want it.')}
+
         <div class="s-section">Behaviour</div>
         ${switchRow('hideOnBlur', s.hideOnBlur, 'Hide on focus loss', 'Auto-close popup when clicked away')}
-        ${switchRow('popupAtCursor', s.popupAtCursor, 'Open near cursor', 'Popup appears next to the mouse pointer on the same monitor, kept fully on-screen. Off: opens centered. (Popup mode only)')}
+        ${switchRow('rememberPosition', s.rememberPosition, 'Remember window position', 'Popup reopens exactly where you last closed it. Off: opens centered. (Popup mode only)')}
         ${switchRow('launchAtTop', s.launchAtTop, 'Launch at screen top', 'Position the popup near the top of the screen')}
         ${switchRow('autoPaste', s.autoPaste, 'Auto-paste on select', 'Paste straight into the focused field (sends Ctrl+V via xdotool)')}
         ${switchRow('windowFrame', s.windowFrame, 'Taskbar window', 'On: a normal window with a taskbar entry. Off: floating always-on-top popup that hides on focus loss. Restart to apply.')}
@@ -322,6 +347,24 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
     });
     dlClearBtn.addEventListener('click', () => setDlDir(''));
 
+    // Backup folder chooser + backup-now
+    const buPathEl = root.querySelector<HTMLElement>('[data-role="backupDir"]')!;
+    root.querySelector<HTMLButtonElement>('[data-action="choose-backup-dir"]')!.addEventListener('click', async () => {
+      try {
+        const dir = await deps.chooseBackupDir();
+        if (!dir) return;
+        if (current) current.backupDir = dir;
+        buPathEl.textContent = dir;
+        buPathEl.title = dir;
+        buPathEl.classList.remove('empty');
+      } catch (err) {
+        alert('Could not open folder picker: ' + String(err));
+      }
+    });
+    root.querySelector<HTMLButtonElement>('[data-action="backup-now"]')!.addEventListener('click', () => {
+      void deps.backupNow();
+    });
+
     // Vault export (password prompt + save dialog handled by the caller)
     root.querySelector<HTMLButtonElement>('[data-action="export-vault"]')!.addEventListener('click', () => {
       void deps.exportVault();
@@ -352,8 +395,15 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         theme: (themeOpt?.dataset.val as AppSettings['theme']) ?? current.theme,
         keepImages: roleOn('keepImages'),
         pinnedOnTop: roleOn('pinnedOnTop'),
+        showMemory: roleOn('showMemory'),
+        backupEnabled: roleOn('backupEnabled'),
+        backupTime:
+          (root.querySelector('#s-backup-time') as HTMLInputElement).value || current.backupTime,
+        backupIncludeVault: roleOn('backupIncludeVault'),
+        backupIncludePinned: roleOn('backupIncludePinned'),
+        backupCleanAfter: roleOn('backupCleanAfter'),
         hideOnBlur: roleOn('hideOnBlur'),
-        popupAtCursor: roleOn('popupAtCursor'),
+        rememberPosition: roleOn('rememberPosition'),
         launchAtTop: roleOn('launchAtTop'),
         autoPaste: roleOn('autoPaste'),
         windowFrame: roleOn('windowFrame'),

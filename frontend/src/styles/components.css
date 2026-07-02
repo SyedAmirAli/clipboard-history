@@ -1483,3 +1483,39 @@
 .prompt-dialog .prompt-input::placeholder {
   color: var(--text-soft);
 }
+
+/* Right-aligned status inside the filter chips row: memory + item count */
+.chips-meta {
+  margin-left: auto;
+  align-self: center;
+  font-size: 11px;
+  color: var(--text-soft);
+  white-space: nowrap;
+  padding-right: 2px;
+}
+
+/* Time input in settings (backup time) — matches the stepper input look */
+.time-input {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  font-family: inherit;
+  transition: border-color var(--transition), background var(--transition);
+}
+.time-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.time-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+.chips-meta strong {
+  font-weight: 600;
+  color: var(--text-muted);
+}

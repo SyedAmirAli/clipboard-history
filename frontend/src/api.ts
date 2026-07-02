@@ -54,6 +54,9 @@ declare global {
           TogglePopup(): Promise<void>;
           IsVisible(): Promise<boolean>;
           SystemInfo(): Promise<Record<string, string>>;
+          RuntimeStats(includeMemory: boolean): Promise<{ rssBytes: number; totalItems: number }>;
+          RunBackupNow(): Promise<string>;
+          ChooseBackupDir(): Promise<string>;
         };
       };
     };
@@ -227,6 +230,21 @@ export const api = {
       console.warn('clipboard fallback failed', e);
     }
     return 'failed';
+  },
+  /**
+   * Total DB item count for the chips-row status; process-tree RSS is only
+   * measured when includeMemory is set (the "Show memory usage" setting).
+   */
+  runtimeStats(includeMemory: boolean): Promise<{ rssBytes: number; totalItems: number }> {
+    return svc().RuntimeStats(includeMemory);
+  },
+  /** Run a backup immediately; resolves to the saved zip path. */
+  runBackupNow(): Promise<string> {
+    return svc().RunBackupNow();
+  },
+  /** Native folder picker for the backup destination. */
+  chooseBackupDir(): Promise<string> {
+    return svc().ChooseBackupDir();
   },
   async systemInfo(): Promise<SystemInfo> {
     const raw = await svc().SystemInfo();

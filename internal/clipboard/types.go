@@ -52,11 +52,32 @@ type Settings struct {
 	// group above the recent list. When false, pinned items appear only in
 	// the Pinned filter tab.
 	PinnedOnTop bool `json:"pinnedOnTop"`
-	// PopupAtCursor, when true (default), opens the popup next to the mouse
-	// pointer — on the pointer's monitor, clamped fully on-screen. When
-	// false (or when placement isn't possible), the popup opens centered.
-	// Popup mode only; windowed mode never repositions.
-	PopupAtCursor bool `json:"popupAtCursor"`
+	// ShowMemory, when true, displays the app's live RAM usage in the
+	// filter chips row. Off by default — the periodic /proc polling costs
+	// a little power, so it's opt-in.
+	ShowMemory bool `json:"showMemory"`
+	// RememberPosition, when true (default), reopens the popup at the
+	// position it was last closed from. When false (or before any position
+	// has been saved), the popup opens centered. Popup mode only; windowed
+	// mode never repositions.
+	RememberPosition bool `json:"rememberPosition"`
+
+	// Daily backup. When enabled, a zip of the last 24 hours of history is
+	// written to BackupDir at BackupTime (HH:MM, 24h clock) every day. A
+	// missed slot (machine off) runs at the next app start.
+	BackupEnabled bool   `json:"backupEnabled"`
+	BackupTime    string `json:"backupTime"`
+	BackupDir     string `json:"backupDir"`
+	// BackupIncludeVault adds vault entries in their as-stored encrypted
+	// form (AES-GCM, locked by the vault password) — nothing readable
+	// without the password, and no secret is ever written to disk.
+	BackupIncludeVault bool `json:"backupIncludeVault"`
+	// BackupIncludePinned adds ALL pinned items (regardless of the 24h
+	// window; pinned items are few and durable).
+	BackupIncludePinned bool `json:"backupIncludePinned"`
+	// BackupCleanAfter deletes non-pinned history after a successful
+	// backup. Pinned items and the vault are never touched.
+	BackupCleanAfter bool `json:"backupCleanAfter"`
 }
 
 // DefaultSettings returns the baseline settings used on first run.
@@ -69,9 +90,16 @@ func DefaultSettings() Settings {
 		Theme:       "auto",
 		HideOnBlur:  true,
 		LaunchAtTop: false,
-		WindowFrame:   true,
-		AutoPaste:     true,
-		PinnedOnTop:   true,
-		PopupAtCursor: true,
+		WindowFrame:         true,
+		AutoPaste:           true,
+		PinnedOnTop:         true,
+		ShowMemory:          false,
+		RememberPosition:    true,
+		BackupEnabled:       false,
+		BackupTime:          "02:00",
+		BackupDir:           "",
+		BackupIncludeVault:  false,
+		BackupIncludePinned: true,
+		BackupCleanAfter:    false,
 	}
 }

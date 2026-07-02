@@ -32,8 +32,17 @@ export interface AppSettings {
   downloadDir: string;
   /** True: pinned items show in a group above the list. False: Pinned tab only. */
   pinnedOnTop: boolean;
-  /** True: popup opens near the mouse pointer (popup mode). False: centered. */
-  popupAtCursor: boolean;
+  /** True: popup reopens where it was last closed (popup mode). False: centered. */
+  rememberPosition: boolean;
+  /** Show live RAM usage in the chips row (opt-in; costs a little power). */
+  showMemory: boolean;
+  /** Daily backup configuration. */
+  backupEnabled: boolean;
+  backupTime: string;
+  backupDir: string;
+  backupIncludeVault: boolean;
+  backupIncludePinned: boolean;
+  backupCleanAfter: boolean;
 }
 
 export interface SystemInfo {

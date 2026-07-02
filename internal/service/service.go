@@ -56,6 +56,7 @@ type Service struct {
 	vaultKey     []byte
 	vaultExpiry  time.Time
 	pendingSetup *vault.SetupBundle
+	backupOnce   sync.Once
 }
 
 // New constructs a Service with all wiring dependencies.
@@ -65,7 +66,10 @@ func New(store *db.Store, hk HotkeySetter) *Service {
 
 // AttachContext is called from Wails OnStartup so subsequent Show/Hide
 // operations can target the runtime.
-func (s *Service) AttachContext(ctx context.Context) { s.ctx = ctx }
+func (s *Service) AttachContext(ctx context.Context) {
+	s.ctx = ctx
+	s.startBackupLoop()
+}
 
 // Context exposes the Wails context for collaborators (e.g. tray) that
 // need to emit events or control the window from outside the JS bridge.
@@ -487,7 +491,14 @@ func (s *Service) GetSettings() (clipboard.Settings, error) {
 	out.AutoPaste = get("auto_paste", boolStr(def.AutoPaste)) == "1"
 	out.DownloadDir = get("download_dir", def.DownloadDir)
 	out.PinnedOnTop = get("pinned_on_top", boolStr(def.PinnedOnTop)) == "1"
-	out.PopupAtCursor = get("popup_at_cursor", boolStr(def.PopupAtCursor)) == "1"
+	out.ShowMemory = get("show_memory", boolStr(def.ShowMemory)) == "1"
+	out.RememberPosition = get("remember_position", boolStr(def.RememberPosition)) == "1"
+	out.BackupEnabled = get("backup_enabled", boolStr(def.BackupEnabled)) == "1"
+	out.BackupTime = get("backup_time", def.BackupTime)
+	out.BackupDir = get("backup_dir", def.BackupDir)
+	out.BackupIncludeVault = get("backup_include_vault", boolStr(def.BackupIncludeVault)) == "1"
+	out.BackupIncludePinned = get("backup_include_pinned", boolStr(def.BackupIncludePinned)) == "1"
+	out.BackupCleanAfter = get("backup_clean_after", boolStr(def.BackupCleanAfter)) == "1"
 	s.settingsLog.Store(out)
 	return out, nil
 }
@@ -553,7 +564,32 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 	if err := put("pinned_on_top", boolStr(in.PinnedOnTop)); err != nil {
 		return prev, err
 	}
-	if err := put("popup_at_cursor", boolStr(in.PopupAtCursor)); err != nil {
+	if err := put("show_memory", boolStr(in.ShowMemory)); err != nil {
+		return prev, err
+	}
+	if err := put("remember_position", boolStr(in.RememberPosition)); err != nil {
+		return prev, err
+	}
+	// Backup time must be a valid HH:MM; keep the previous value otherwise.
+	if _, err := time.Parse("15:04", in.BackupTime); err != nil {
+		in.BackupTime = prev.BackupTime
+	}
+	if err := put("backup_enabled", boolStr(in.BackupEnabled)); err != nil {
+		return prev, err
+	}
+	if err := put("backup_time", in.BackupTime); err != nil {
+		return prev, err
+	}
+	if err := put("backup_dir", in.BackupDir); err != nil {
+		return prev, err
+	}
+	if err := put("backup_include_vault", boolStr(in.BackupIncludeVault)); err != nil {
+		return prev, err
+	}
+	if err := put("backup_include_pinned", boolStr(in.BackupIncludePinned)); err != nil {
+		return prev, err
+	}
+	if err := put("backup_clean_after", boolStr(in.BackupCleanAfter)); err != nil {
 		return prev, err
 	}
 	if s.hotkeyMgr != nil && in.Hotkey != prev.Hotkey {
@@ -703,12 +739,13 @@ func (s *Service) ShowPopup() {
 	wailsruntime.WindowUnminimise(s.ctx) // restore if minimised to the taskbar
 	// In windowed mode the user owns the window position and stacking, so we
 	// don't force always-on-top or re-center on every summon. In popup mode
-	// we keep the classic Windows+V behaviour: float on top — near the mouse
-	// pointer when possible (best proxy for the focused input field, and
-	// automatically the right monitor on multi-head setups), else centered.
+	// we keep the classic Windows+V behaviour: float on top — reopening at
+	// the position it was last closed from (saved in HidePopup), which also
+	// keeps it on the monitor the user last used it on. Falls back to
+	// centering when disabled or before any position has been saved.
 	if settings := s.CurrentSettings(); !settings.WindowFrame {
 		wailsruntime.WindowSetAlwaysOnTop(s.ctx, true)
-		if !settings.PopupAtCursor || !s.positionNearCursor() {
+		if !settings.RememberPosition || !s.restoreLastPosition() {
 			wailsruntime.WindowCenter(s.ctx)
 		}
 	}
@@ -722,10 +759,11 @@ func (s *Service) ShowPopup() {
 		// windowed mode they would strip the taskbar entry and break minimise.
 		settings := s.CurrentSettings()
 		x11hint.Nudge(!settings.WindowFrame)
-		// Re-apply cursor placement once the window is definitely mapped —
-		// a move issued in the same tick as the first map can be dropped.
-		if !settings.WindowFrame && settings.PopupAtCursor {
-			s.positionNearCursor()
+		// Re-apply the restored position once the window is definitely
+		// mapped — a move issued in the same tick as the first map can be
+		// dropped by the window manager.
+		if !settings.WindowFrame && settings.RememberPosition {
+			s.restoreLastPosition()
 		}
 	}()
 	// The clipboard watcher runs in the separate clipd-watch process, so this GUI
@@ -735,30 +773,50 @@ func (s *Service) ShowPopup() {
 	s.visible.Store(true)
 }
 
-// positionNearCursor moves the popup next to the mouse pointer, fully inside
-// the pointer's monitor (flipping above / sliding left near screen edges).
-// Returns false when placement isn't possible (Wayland-native window, no
-// xdotool, …) so the caller can fall back to centering.
-func (s *Service) positionNearCursor() bool {
-	if !x11hint.CanPosition() {
+// restoreLastPosition moves the popup to wherever it was last closed from
+// (saved by HidePopup). Returns false when no position has been saved yet so
+// the caller can fall back to centering.
+//
+// Save and restore both go through xdotool (raw X11 coordinates) rather than
+// GTK: with mutter's xwayland-native-scaling, GTK's coordinate space diverges
+// from X11's (observed: X halved, Y unchanged), while the xdotool read+move
+// pair round-trips exactly.
+func (s *Service) restoreLastPosition() bool {
+	xs, _ := s.store.GetSetting("popup_x", "")
+	ys, _ := s.store.GetSetting("popup_y", "")
+	if xs == "" || ys == "" {
 		return false
 	}
-	w, h := wailsruntime.WindowGetSize(s.ctx)
-	if w <= 0 || h <= 0 {
+	x, errX := strconv.Atoi(xs)
+	y, errY := strconv.Atoi(ys)
+	if errX != nil || errY != nil {
 		return false
 	}
-	x, y, ok := x11hint.PopupPosition(w, h)
+	return x11hint.MoveWindow(x, y)
+}
+
+// saveLastPosition persists the popup's current position so the next summon
+// reopens it exactly where the user left it (survives restarts via the DB).
+// Skips saving when the position can't be read (e.g. no X11 window) so a
+// previously saved good position is never overwritten with garbage.
+func (s *Service) saveLastPosition() {
+	x, y, ok := x11hint.WindowPosition()
 	if !ok {
-		return false
+		return
 	}
-	wailsruntime.WindowSetPosition(s.ctx, x, y)
-	return true
+	_ = s.store.SetSetting("popup_x", strconv.Itoa(x))
+	_ = s.store.SetSetting("popup_y", strconv.Itoa(y))
 }
 
 // HidePopup hides the popup window.
 func (s *Service) HidePopup() {
 	if s.ctx == nil {
 		return
+	}
+	// Capture the position while the window is still mapped — this is what
+	// "reopen where I closed it" restores from.
+	if !s.CurrentSettings().WindowFrame {
+		s.saveLastPosition()
 	}
 	wailsruntime.WindowHide(s.ctx)
 	s.visible.Store(false)

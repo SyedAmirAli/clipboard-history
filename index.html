@@ -87,10 +87,43 @@
     @keyframes blink { 0%,55% { opacity: 1; } 56%,100% { opacity: 0; } }
     .caret { animation: blink 1.1s steps(1) infinite; }
 
-    /* popup inner scroll area */
-    .pop-scroll { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / .4) transparent; }
-    .pop-scroll::-webkit-scrollbar { width: 8px; }
-    .pop-scroll::-webkit-scrollbar-thumb { background: rgb(148 163 184 / .35); border-radius: 99px; }
+    /* theme-aware tiny scrollbars */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgb(148 163 184 / .5) transparent;
+    }
+    *::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    *::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    *::-webkit-scrollbar-thumb {
+      min-height: 36px;
+      border: 2px solid transparent;
+      border-radius: 999px;
+      background: rgb(100 116 139 / .42);
+      background-clip: content-box;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: rgb(124 58 237 / .62);
+      background-clip: content-box;
+    }
+    .dark * {
+      scrollbar-color: rgb(167 139 250 / .48) transparent;
+    }
+    .dark *::-webkit-scrollbar-thumb {
+      background: rgb(167 139 250 / .36);
+      background-clip: content-box;
+    }
+    .dark *::-webkit-scrollbar-thumb:hover {
+      background: rgb(34 211 238 / .55);
+      background-clip: content-box;
+    }
+    .scroll-tiny { scrollbar-width: thin; }
+    .scroll-tiny::-webkit-scrollbar { width: 5px; height: 5px; }
+    .scroll-tiny::-webkit-scrollbar-thumb { border-width: 1.5px; }
 
     /* aurora drift */
     @keyframes drift { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(2%, -3%, 0) scale(1.08); } }
@@ -626,7 +659,7 @@
   </footer>
 
   <!-- ============================ FIRST VISIT RELEASE NOTES ============================ -->
-  <div id="release-modal" hidden class="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-title" aria-describedby="release-summary">
+  <div id="release-modal" hidden class="scroll-tiny fixed inset-0 z-[90] overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-title" aria-describedby="release-summary">
     <div class="mx-auto my-6 flex min-h-[calc(100vh-3rem)] max-w-4xl items-center">
       <div class="relative w-full overflow-hidden rounded-3xl border border-white/15 bg-white shadow-2xl shadow-slate-950/30 dark:bg-[#0e0e16]">
         <div aria-hidden="true" class="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-500/25 blur-3xl"></div>
@@ -654,7 +687,7 @@
           </div>
         </div>
 
-        <div class="relative max-h-[68vh] overflow-y-auto px-5 py-5 sm:px-6">
+        <div class="scroll-tiny relative max-h-[68vh] overflow-y-auto px-5 py-5 sm:px-6">
           <section id="release-panel-linux" data-release-panel="linux" role="tabpanel" aria-labelledby="release-tab-linux" hidden>
             <div class="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
               <div>

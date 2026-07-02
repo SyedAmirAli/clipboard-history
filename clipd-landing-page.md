@@ -59,15 +59,16 @@ Wire them into Tailwind v4 with a theme block (see skeleton §7) so you can use 
 ## 3. Page structure (sections, in order)
 
 1. **Sticky nav** — logo "clipd", anchor links (Features · Screenshots · Download · About), **theme toggle**, **GitHub ⭐ Star** button, primary **Download** button. Collapses to a hamburger on mobile.
-2. **Hero** — big headline + subhead, two primary CTAs (**Download for Windows**, **Star on GitHub**) + a secondary Linux link, trust line ("Free & open source · ~15 MB · no installer"), and a **hero screenshot/mockup** (use a strong light or dark shot; ideally swaps with the theme).
-3. **Star banner** — a slim, friendly call‑to‑action strip: "If clipd saves you time, please ⭐ the repo — it really helps." with a star button + live‑looking star badge (use the GitHub shields badge img).
-4. **Features grid** — 6–9 cards (see §4 for the exact list/copy), each with an icon (inline SVG), title, one‑line description.
-5. **Screenshots gallery** — tabbed or toggle **Light / Dark**, responsive grid/carousel of the app screenshots (§5). The gallery's light/dark choice should default to the current page theme.
-6. **How it works / Quick start** — 3 steps (Download → Run → press **Win + J**), plus the copy‑able CLI line.
-7. **Download** — two big cards: **Windows (.exe)** and **Linux (.deb)** with version + the exact URLs (§8), file size, and "no install needed" notes. Mention the GitHub Releases page too.
-8. **Built with / Open source** — small strip: Go · Wails v2 · TypeScript · pure‑Go SQLite, single ~15 MB binary; link to the repo and explain the branch layout (`windows` = Windows build, `master` = Linux/cross‑platform).
-9. **About the developer** — short bio, avatar/initials, links to portfolio, LinkedIn, email, phone; a CTA to "follow / star."
-10. **Footer** — repo link, download links, contact, copyright "© 2026 Syed Amir Ali", "Built with clipd in mind" + one more ⭐ Star button.
+2. **First-visit release notes modal** — on first browser visit, detect the visitor OS and show the matching release notes tab first (`Linux v1.6.0` for Linux/unknown, `Windows v2.0` for Windows). Keep both tabs available. Store dismissal in `localStorage` or a cookie so it appears only once per release.
+3. **Hero** — big headline + subhead, two primary CTAs (**Download for Windows**, **Star on GitHub**) + a secondary Linux link, trust line ("Free & open source · ~15 MB · no installer"), and a **hero screenshot/mockup** (use a strong light or dark shot; ideally swaps with the theme).
+4. **Star banner** — a slim, friendly call‑to‑action strip: "If clipd saves you time, please ⭐ the repo — it really helps." with a star button + live‑looking star badge (use the GitHub shields badge img).
+5. **Features grid** — 6–9 cards (see §4 for the exact list/copy), each with an icon (inline SVG), title, one‑line description.
+6. **Screenshots gallery** — tabbed or toggle **Light / Dark**, responsive grid/carousel of the app screenshots (§5). The gallery's light/dark choice should default to the current page theme.
+7. **How it works / Quick start** — 3 steps (Download → Run → press **Win + J**), plus the copy‑able CLI line.
+8. **Download** — two big cards: **Windows (.exe)** and **Linux (.deb)** with version + the exact URLs (§8), file size, and "no install needed" notes. Mention the GitHub Releases page too.
+9. **Built with / Open source** — small strip: Go · Wails v2 · TypeScript · pure‑Go SQLite, single ~15 MB binary; link to the repo and explain the branch layout (`windows` = Windows build, `master` = Linux/cross‑platform).
+10. **About the developer** — short bio, avatar/initials, links to portfolio, LinkedIn, email, phone; a CTA to "follow / star."
+11. **Footer** — repo link, download links, contact, copyright "© 2026 Syed Amir Ali", "Built with clipd in mind" + one more ⭐ Star button.
 
 ---
 
@@ -81,15 +82,15 @@ Wire them into Tailwind v4 with a theme block (see skeleton §7) so you can use 
 - **Trust line:** "Free & open source · single ~15 MB binary · no installer · works offline."
 
 ### Features (cards — title + one‑liner)
-1. **Text & image history** — Every copy is saved with thumbnails; scroll back through your whole clipboard.
+1. **Text & image history** — Every copy is saved with thumbnails; GNOME Wayland image and screenshot capture is supported on Linux v1.6.0.
 2. **Instant search & filters** — Live search with All / Text / Images / Pinned filters.
-3. **Global hotkey — Win + J** — Summons the popup **at your cursor**, on the right monitor, instantly.
+3. **Global hotkey — Win + J** — Summons the popup instantly, with smart cursor placement and window position memory.
 4. **Pin what matters** — Pin snippets so they never get evicted from history.
-5. **Private Vault** — PIN/password‑protected, encrypted storage for sensitive clips.
-6. **Save to file & Export ZIP** — Save any item (sorted into `text/` & `images/`) or export your whole history to a ZIP.
-7. **System tray + taskbar** — Lives in the tray with a full menu; optional taskbar button; auto‑start on login.
+5. **Private Vault** — PIN/password‑protected, encrypted storage for sensitive clips, with optional encrypted vault entries in backups.
+6. **Downloads & ZIP exports** — Download any item, export your whole history, or schedule daily ZIP backups with `texts/`, `images/`, `vault/`, and `manifest.json`.
+7. **Daily backup system** — Pick a time and folder, include pinned items, catch up missed runs, notify on completion, and optionally clean history after a successful backup.
 8. **Light · Dark · Auto** — A beautiful frameless UI that matches your system theme.
-9. **Native & fast** — Built on the Win32 clipboard API (no heavy deps); reliable image/screenshot capture.
+9. **Native Linux support** — Linux v1.6.0 ships a GNOME Shell extension and watcher helper for modern Wayland desktops.
 
 ### How it works (3 steps)
 1. **Download** the single `.exe` (Windows) or `.deb` (Linux).
@@ -103,8 +104,9 @@ clipd toggle   # show/hide the popup · clipd quit to exit
 
 ### Download cards
 - **Windows 10 / 11 (x64)** — `clipd‑v2.0.0.exe` · ~15 MB · portable, no installer. Button → Windows URL (§8).
-- **Linux — Ubuntu / Mint (amd64)** — `clipd_1.1.5_amd64.deb`. Button → Linux URL (§8). Note: `sudo apt install ./clipd_1.1.5_amd64.deb`.
-- Secondary: "See all releases on GitHub →" (→ repo `/releases`).
+- **Linux — Ubuntu 26+ / Linux kernel 7+ (amd64)** — `clipd_1.6.0_amd64.deb`. Button → Linux URL (§8). Note: `sudo apt install ./clipd_1.6.0_amd64.deb`.
+- Mention the standalone Linux assets: watcher helper script and GNOME Shell extension ZIP.
+- Secondary: "Need the legacy X11 Ubuntu build? Use clipd v1.1.5." plus "See all releases on GitHub →" (→ repo `/releases`).
 
 ### About the developer
 - **Name:** Syed Amir Ali
@@ -213,7 +215,11 @@ Notes for the implementer:
 
 **Downloads**
 - **Windows (.exe):** `https://github.com/SyedAmirAli/clipboard-history/releases/download/v2.0.0/clipd-v2.0.0.exe`
-- **Linux (.deb, Ubuntu/Mint amd64):** `https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.1.5/clipd_1.1.5_amd64.deb`
+- **Linux (.deb, Ubuntu 26+ / Linux kernel 7+ amd64):** `https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd_1.6.0_amd64.deb`
+- **Linux watcher helper:** `https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd-watcher-helper.py`
+- **GNOME extension:** `https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd-watcher@syedamirali.shell-extension.zip`
+- **Linux v1.6.0 release notes:** `https://github.com/SyedAmirAli/clipboard-history/releases/tag/v1.6.0`
+- **Legacy X11 Ubuntu release:** `https://github.com/SyedAmirAli/clipboard-history/releases/tag/v1.1.5`
 
 **Repository**
 - **Main repo:** `https://github.com/SyedAmirAli/clipboard-history`
@@ -230,9 +236,9 @@ Notes for the implementer:
 - **Name / copyright:** Syed Amir Ali · © 2026
 
 **App facts (for copy)**
-- Name: **clipd** · Version: **v2.0.0** (Windows) / **v1.1.5** (Linux `.deb`).
+- Name: **clipd** · Version: **v2.0.0** (Windows) / **v1.6.0** (Linux `.deb`; v1.1.5 remains the legacy X11 Ubuntu release).
 - Built with **Go + Wails v2 + TypeScript + pure‑Go SQLite**; single **~15 MB** native binary.
-- Key features: text+image history, global hotkey **Win + J** (opens at cursor, multi‑monitor aware), live search + filters, pinning, **Private Vault** (encrypted), **Save to file** (`text/`+`images/` subfolders) and **Export all to ZIP**, system tray menu + taskbar button, auto‑start, light/dark/auto themes.
+- Key features: text+image history, GNOME Wayland image capture, global hotkey **Win + J**, smart popup/window positioning, live search + filters, live stats, pinning, **Private Vault** (encrypted), item downloads, **Export all to ZIP**, scheduled daily backups, system tray menu + taskbar button, auto‑start, light/dark/auto themes.
 
 ---
 

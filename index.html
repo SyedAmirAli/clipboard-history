@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>clipd — clipboard history with a memory · Windows &amp; Linux</title>
-  <meta name="description" content="clipd is a fast, native, open-source clipboard history manager for Windows and Linux. Text &amp; image history, global hotkey, search, pinning, encrypted vault, dark/light themes." />
+  <meta name="description" content="clipd is a fast, native, open-source clipboard history manager for Windows and Linux. Text &amp; image history, GNOME Wayland capture, daily backups, encrypted vault, search, pinning, dark/light themes." />
   <meta name="author" content="Syed Amir Ali" />
   <meta property="og:title" content="clipd — your clipboard, with a memory" />
   <meta property="og:description" content="Fast, native, open-source clipboard history for Windows &amp; Linux." />
@@ -105,6 +105,7 @@
 
     /* lightbox */
     .lb-open { overflow: hidden; }
+    .modal-open { overflow: hidden; }
   </style>
 </head>
 
@@ -195,7 +196,7 @@
           </h1>
 
           <p class="mt-5 text-lg leading-relaxed text-slate-600 dark:text-slate-300">
-            clipd quietly remembers everything you copy — text and images — so you can search it, pin it, paste it, and never lose a snippet again. Lightning-fast, native, and private.
+            clipd quietly remembers everything you copy — text and images — so you can search it, pin it, back it up, paste it, and never lose a snippet again. Lightning-fast, native, and private.
           </p>
 
           <div class="mt-8 flex flex-wrap items-center gap-3">
@@ -207,13 +208,13 @@
               <svg class="h-4.5 w-4.5 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27 6.18 21l1.64-7.03L2 9.24l7.19-.62L12 2l2.81 6.62 7.19.62-5.82 4.73L17.82 21z"/></svg>
               Star on GitHub
             </a>
-            <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.1.5/clipd_1.1.5_amd64.deb" class="inline-flex items-center gap-1.5 px-1 text-sm font-600 text-slate-500 underline-offset-4 transition hover:text-brand-600 hover:underline dark:text-slate-400 dark:hover:text-brand-400">
+            <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd_1.6.0_amd64.deb" class="inline-flex items-center gap-1.5 px-1 text-sm font-600 text-slate-500 underline-offset-4 transition hover:text-brand-600 hover:underline dark:text-slate-400 dark:hover:text-brand-400">
               Linux (.deb) <span aria-hidden="true">→</span>
             </a>
           </div>
 
           <p class="mt-6 font-mono text-xs text-slate-500 dark:text-slate-400">
-            Free &amp; open source · single ~15&nbsp;MB binary · no installer · works offline
+            Free &amp; open source · native builds · GNOME Wayland ready · works offline
           </p>
         </div>
 
@@ -341,7 +342,7 @@
       <div class="reveal mx-auto max-w-2xl text-center">
         <p class="mb-3 font-mono text-xs uppercase tracking-widest text-brand-600 dark:text-brand-400">// what it does</p>
         <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Everything your clipboard forgets, clipd keeps.</h2>
-        <p class="mt-4 text-slate-600 dark:text-slate-300">Nine things it does well — nothing it doesn’t need to.</p>
+        <p class="mt-4 text-slate-600 dark:text-slate-300">Fast recall, private storage, Linux Wayland support, and backups that run on schedule.</p>
       </div>
 
       <div class="reveal mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -349,7 +350,7 @@
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
           <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18M7 13h6"/></svg></div>
           <h3 class="font-display text-lg font-600">Text &amp; image history</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Every copy is saved with thumbnails — scroll back through your whole clipboard, text and images alike.</p>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Every copy is saved with thumbnails — including GNOME Wayland image and screenshot capture on Linux.</p>
         </article>
 
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
@@ -361,7 +362,7 @@
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
           <div class="mb-4 flex items-center gap-1.5"><kbd class="key">Win</kbd><span class="text-slate-400">+</span><kbd class="key">J</kbd></div>
           <h3 class="font-display text-lg font-600">Global hotkey</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Summons the popup <span class="font-600">at your cursor</span>, on the right monitor, instantly — from any app.</p>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Summons the popup instantly, with smart cursor placement and window position memory between launches.</p>
         </article>
 
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
@@ -373,19 +374,19 @@
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
           <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.4"/></svg></div>
           <h3 class="font-display text-lg font-600">Private Vault</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">PIN- or password-protected, encrypted storage for tokens, keys, and anything sensitive.</p>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">PIN- or password-protected encrypted storage, with optional encrypted vault entries in backups.</p>
         </article>
 
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
           <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div>
-          <h3 class="font-display text-lg font-600">Save to file &amp; export ZIP</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Save any item into <span class="font-mono text-xs">text/</span> &amp; <span class="font-mono text-xs">images/</span> folders, or export your whole history to a ZIP.</p>
+          <h3 class="font-display text-lg font-600">Downloads &amp; ZIP exports</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Download any item, export all history, or schedule daily ZIP backups with text, images, and metadata.</p>
         </article>
 
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
           <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
-          <h3 class="font-display text-lg font-600">System tray + taskbar</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Lives in the tray with a full menu, an optional taskbar button, and auto-start on login.</p>
+          <h3 class="font-display text-lg font-600">Daily backup system</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Pick a time and folder, include pinned and vault items, catch up missed runs, and clean history after success.</p>
         </article>
 
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
@@ -396,8 +397,8 @@
 
         <article class="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-brand-500/40 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/40">
           <div class="mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-400"><svg class="h-5.5 w-5.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-9 12h7l-2 8 9-12h-7z"/></svg></div>
-          <h3 class="font-display text-lg font-600">Native &amp; fast</h3>
-          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Built on the native Win32 clipboard API — no heavy deps, reliable image and screenshot capture.</p>
+          <h3 class="font-display text-lg font-600">Native Linux support</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">The v1.6.0 Linux build ships with a GNOME extension and watcher helper for modern Wayland desktops.</p>
         </article>
       </div>
     </section>
@@ -432,12 +433,12 @@
           <li class="relative rounded-2xl border border-slate-200 bg-[#fafafa] p-6 dark:border-white/10 dark:bg-white/[0.03]">
             <span class="font-mono text-xs text-slate-400">step 01</span>
             <h3 class="mt-2 font-display text-lg font-600">Download</h3>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Grab the single <span class="font-mono text-xs">.exe</span> (Windows) or <span class="font-mono text-xs">.deb</span> (Linux). One file, ~15 MB.</p>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Grab the single <span class="font-mono text-xs">.exe</span> for Windows or the Linux <span class="font-mono text-xs">.deb</span> with GNOME Wayland support.</p>
           </li>
           <li class="relative rounded-2xl border border-slate-200 bg-[#fafafa] p-6 dark:border-white/10 dark:bg-white/[0.03]">
             <span class="font-mono text-xs text-slate-400">step 02</span>
             <h3 class="mt-2 font-display text-lg font-600">Run it</h3>
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">No install, no admin. It starts quietly in your system tray and begins remembering.</p>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">It starts quietly in your system tray and begins remembering. Linux installs the app, watcher helper, and GNOME extension.</p>
           </li>
           <li class="relative rounded-2xl border border-slate-200 bg-[#fafafa] p-6 dark:border-white/10 dark:bg-white/[0.03]">
             <span class="font-mono text-xs text-slate-400">step 03</span>
@@ -495,24 +496,32 @@
             <span class="grid h-12 w-12 place-items-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400" aria-hidden="true"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3.5c-1.2 1.5-1 4-.5 6-1 2-3 4.5-3 7 0 2 1.5 3 3 3 .5 1 1.8 1 3 1s2.5 0 3-1c1.5 0 3-1 3-3 0-2.5-2-5-3-7 .5-2 .7-4.5-.5-6-.8-1-3.7-1-4.5 0z"/><circle cx="10.3" cy="8" r=".6" fill="currentColor"/><circle cx="13.7" cy="8" r=".6" fill="currentColor"/></svg></span>
             <div>
               <h3 class="font-display text-xl font-700">Linux</h3>
-              <p class="font-mono text-xs text-slate-500 dark:text-slate-400">Ubuntu / Mint · amd64</p>
+              <p class="font-mono text-xs text-slate-500 dark:text-slate-400">Ubuntu 26+ · Linux kernel 7+ · amd64</p>
             </div>
-            <span class="ml-auto rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-600 text-slate-600 dark:bg-white/10 dark:text-slate-300">v1.1.5</span>
+            <span class="ml-auto rounded-full bg-cyan-500/10 px-2.5 py-1 font-mono text-[11px] font-600 text-cyan-700 dark:text-cyan-300">v1.6.0</span>
           </div>
           <ul class="mt-5 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> <span class="font-mono text-xs">clipd_1.1.5_amd64.deb</span></li>
-            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> Install: <span class="font-mono text-xs">sudo apt install ./clipd_1.1.5_amd64.deb</span></li>
-            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> Cross-platform <span class="font-mono text-xs">master</span> branch</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> <span class="font-mono text-xs">clipd_1.6.0_amd64.deb</span></li>
+            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> GNOME Wayland image capture with bundled extension + helper</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> Daily backups, window memory, live stats, downloads, vault export</li>
+            <li class="flex items-center gap-2"><span class="text-cyan-500">›</span> Install: <span class="font-mono text-xs">sudo apt install ./clipd_1.6.0_amd64.deb</span></li>
           </ul>
-          <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.1.5/clipd_1.1.5_amd64.deb" class="mt-6 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-600 text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10">
+          <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd_1.6.0_amd64.deb" class="mt-6 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-600 text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10">
             <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg>
             Download .deb
           </a>
+          <div class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+            <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd-watcher-helper.py" class="font-600 text-cyan-700 underline-offset-4 hover:underline dark:text-cyan-300">Watcher helper</a>
+            <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd-watcher@syedamirali.shell-extension.zip" class="font-600 text-cyan-700 underline-offset-4 hover:underline dark:text-cyan-300">GNOME extension</a>
+            <a href="https://github.com/SyedAmirAli/clipboard-history/releases/tag/v1.6.0" target="_blank" rel="noopener" class="font-600 text-cyan-700 underline-offset-4 hover:underline dark:text-cyan-300">Release notes</a>
+          </div>
         </article>
       </div>
 
       <p class="reveal mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
-        Looking for older versions or checksums?
+        Need the legacy X11 Ubuntu build?
+        <a href="https://github.com/SyedAmirAli/clipboard-history/releases/tag/v1.1.5" target="_blank" rel="noopener" class="font-600 text-brand-600 underline-offset-4 hover:underline dark:text-brand-400">Use clipd v1.1.5</a>.
+        Looking for checksums?
         <a href="https://github.com/SyedAmirAli/clipboard-history/releases" target="_blank" rel="noopener" class="font-600 text-brand-600 underline-offset-4 hover:underline dark:text-brand-400">See all releases on GitHub →</a>
       </p>
     </section>
@@ -525,8 +534,7 @@
             <p class="mb-3 font-mono text-xs uppercase tracking-widest text-brand-600 dark:text-brand-400">// open source, honest stack</p>
             <h2 class="font-display text-2xl font-700 tracking-tight sm:text-3xl">Built lean, shipped as one binary.</h2>
             <p class="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-              clipd is a single ~15 MB native binary — no Electron, no background bloat. The repo splits builds by branch:
-              <span class="font-mono text-xs">windows</span> for the native Windows build, <span class="font-mono text-xs">master</span> for Linux / cross-platform.
+              clipd is a native app with local SQLite storage, a Wails UI, and platform-specific clipboard integrations. On Linux v1.6.0 adds GNOME Wayland support through a Shell extension and watcher helper, while older X11 users can stay on v1.1.5.
             </p>
             <a href="https://github.com/SyedAmirAli/clipboard-history" target="_blank" rel="noopener" class="mt-6 inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/15 dark:hover:bg-white/10">
               <svg class="h-4.5 w-4.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.3 6.8 9.7.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.3 9.3 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5 3.9-1.4 6.8-5.2 6.8-9.7C22 6.6 17.5 2 12 2z"/></svg>
@@ -594,7 +602,8 @@
             <h3 class="font-mono text-xs uppercase tracking-widest text-slate-400">Get it</h3>
             <ul class="mt-3 space-y-2 text-sm">
               <li><a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v2.0.1/clipd_v2.0.1.exe" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Windows .exe</a></li>
-              <li><a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.1.5/clipd_1.1.5_amd64.deb" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Linux .deb</a></li>
+              <li><a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd_1.6.0_amd64.deb" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Linux .deb</a></li>
+              <li><a href="https://github.com/SyedAmirAli/clipboard-history/releases/tag/v1.1.5" target="_blank" rel="noopener" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">Legacy X11 Linux</a></li>
               <li><a href="https://github.com/SyedAmirAli/clipboard-history/releases" target="_blank" rel="noopener" class="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400">All releases</a></li>
             </ul>
           </div>
@@ -611,10 +620,159 @@
 
       <div class="mt-10 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-6 text-sm text-slate-500 sm:flex-row dark:border-white/10 dark:text-slate-400">
         <p>© 2026 Syed Amir Ali</p>
-        <p class="font-mono text-xs">clipd · v2.0.1 (Win) · v1.1.5 (Linux)</p>
+        <p class="font-mono text-xs">clipd · v2.0.1 (Win) · v1.6.0 (Linux)</p>
       </div>
     </div>
   </footer>
+
+  <!-- ============================ FIRST VISIT RELEASE NOTES ============================ -->
+  <div id="release-modal" hidden class="fixed inset-0 z-[90] overflow-y-auto bg-slate-950/75 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="release-title" aria-describedby="release-summary">
+    <div class="mx-auto my-6 flex min-h-[calc(100vh-3rem)] max-w-4xl items-center">
+      <div class="relative w-full overflow-hidden rounded-3xl border border-white/15 bg-white shadow-2xl shadow-slate-950/30 dark:bg-[#0e0e16]">
+        <div aria-hidden="true" class="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-500/25 blur-3xl"></div>
+        <div aria-hidden="true" class="absolute -bottom-20 left-10 h-52 w-52 rounded-full bg-cyan-500/20 blur-3xl"></div>
+
+        <div class="relative border-b border-slate-200 bg-white/85 px-5 py-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.03] sm:px-6">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="font-mono text-xs uppercase tracking-widest text-brand-600 dark:text-brand-400">// latest release</p>
+              <h2 id="release-title" class="mt-1 font-display text-2xl font-700 tracking-tight sm:text-3xl">What is new in clipd</h2>
+              <p id="release-summary" class="mt-2 max-w-2xl text-sm text-slate-600 dark:text-slate-300">A quick first-run tour of the newest Windows and Linux builds. The tab is selected automatically from your device.</p>
+            </div>
+            <button id="release-close" type="button" aria-label="Close release notes" class="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
+
+          <div class="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Release notes platform">
+            <button id="release-tab-linux" type="button" role="tab" aria-controls="release-panel-linux" aria-selected="false" data-release-tab="linux" class="release-tab inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-600 transition">
+              <span aria-hidden="true">🐧</span> Linux v1.6.0
+            </button>
+            <button id="release-tab-windows" type="button" role="tab" aria-controls="release-panel-windows" aria-selected="false" data-release-tab="windows" class="release-tab inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-600 transition">
+              <span aria-hidden="true">🪟</span> Windows v2.0
+            </button>
+          </div>
+        </div>
+
+        <div class="relative max-h-[68vh] overflow-y-auto px-5 py-5 sm:px-6">
+          <section id="release-panel-linux" data-release-panel="linux" role="tabpanel" aria-labelledby="release-tab-linux" hidden>
+            <div class="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
+              <div>
+                <span class="inline-flex rounded-full bg-cyan-500/10 px-3 py-1 font-mono text-xs font-600 text-cyan-700 dark:text-cyan-300">GNOME Wayland ready</span>
+                <h3 class="mt-3 font-display text-2xl font-700 tracking-tight">Daily backups, smart window memory, and live stats</h3>
+                <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Linux v1.6.0 adds scheduled backups, fixes popup placement with persistent window memory, and polishes the app across search, keyboard navigation, titlebar actions, and vault forms.</p>
+              </div>
+              <div class="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4 dark:bg-cyan-500/[0.08]">
+                <p class="font-display text-sm font-700 text-cyan-800 dark:text-cyan-200">Install</p>
+                <code class="mt-3 block overflow-x-auto rounded-xl bg-slate-950 px-3 py-2 font-mono text-xs text-slate-100">sudo apt install ./clipd_1.6.0_amd64.deb<br>clipd restart</code>
+                <p class="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300">Upgrading from before v1.5.0? Log out and back in once so GNOME Shell loads the image-capable watcher extension.</p>
+              </div>
+            </div>
+
+            <div class="mt-6 grid gap-3 sm:grid-cols-2">
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <h4 class="font-display font-700">🗄️ Daily backup system</h4>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li>Scheduled daily ZIP backups with a configurable time and folder.</li>
+                  <li>Backs up the last 24 hours, with optional pinned items from any age.</li>
+                  <li>Vault entries stay encrypted in <span class="font-mono text-xs">vault/entries.json</span>.</li>
+                  <li>Missed backup slots run at next clipd start, with desktop notifications.</li>
+                </ul>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <h4 class="font-display font-700">🪟 Remember window position</h4>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li>Popup reopens exactly where you last closed it, even after restarts.</li>
+                  <li>Uses raw X11 coordinates through <span class="font-mono text-xs">xdotool</span> to avoid GNOME scaling quirks.</li>
+                  <li>Settings include a toggle to return to centered behavior.</li>
+                </ul>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <h4 class="font-display font-700">📊 Live stats and smoother navigation</h4>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li>Filter chips show the total database count.</li>
+                  <li>Optional RAM usage display for clipd and WebKit processes.</li>
+                  <li>Arrow keys, PageUp/PageDown, Home/End, and Enter work from anywhere.</li>
+                </ul>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <h4 class="font-display font-700">✨ Polish and fixes</h4>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li>Search clear button, tinted titlebar buttons, and restored vault input icons.</li>
+                  <li>Minimize works in windowed mode.</li>
+                  <li>The popup no longer hides while a native save dialog is open.</li>
+                </ul>
+              </article>
+            </div>
+
+            <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.03]">
+              <h4 class="font-display font-700">Standalone GNOME extension install</h4>
+              <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">The .deb already installs these. For manual setups, install the helper to <span class="font-mono text-xs">/opt/clipd-watcher/main.py</span>, install the extension ZIP, enable <span class="font-mono text-xs">clipd-watcher@syedamirali</span>, then log out and back in.</p>
+              <div class="mt-4 flex flex-wrap gap-3">
+                <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v1.6.0/clipd_1.6.0_amd64.deb" class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-indigo-600 px-4 py-2.5 text-sm font-600 text-white shadow-md shadow-brand-500/25">Download Linux .deb</a>
+                <a href="https://github.com/SyedAmirAli/clipboard-history/releases/tag/v1.6.0" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-600 transition hover:bg-slate-50 dark:border-white/15 dark:hover:bg-white/10">Release notes</a>
+              </div>
+            </div>
+          </section>
+
+          <section id="release-panel-windows" data-release-panel="windows" role="tabpanel" aria-labelledby="release-tab-windows" hidden>
+            <div class="grid gap-4 lg:grid-cols-[1.1fr_.9fr]">
+              <div>
+                <span class="inline-flex rounded-full bg-brand-500/10 px-3 py-1 font-mono text-xs font-600 text-brand-700 dark:text-brand-300">Standalone .exe</span>
+                <h3 class="mt-3 font-display text-2xl font-700 tracking-tight">Native Windows clipboard history, no installer required</h3>
+                <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Clipd 2.0 for Windows is built from the ground up with native clipboard monitoring, Win32 image handling, a frameless always-on-top popup, and a tray workflow that feels at home on Windows.</p>
+              </div>
+              <div class="rounded-2xl border border-brand-500/20 bg-brand-500/[0.06] p-4 dark:bg-brand-500/[0.08]">
+                <p class="font-display text-sm font-700 text-brand-800 dark:text-brand-200">Download</p>
+                <p class="mt-3 text-sm text-slate-600 dark:text-slate-300">Single standalone executable, about 15.5 MB. Download and run.</p>
+                <a href="https://github.com/SyedAmirAli/clipboard-history/releases/download/v2.0.1/clipd_v2.0.1.exe" class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-indigo-600 px-4 py-2.5 text-sm font-600 text-white shadow-md shadow-brand-500/25">Download for Windows</a>
+              </div>
+            </div>
+
+            <div class="mt-6 grid gap-3 sm:grid-cols-2">
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <h4 class="font-display font-700">⌨️ Hotkey and popup</h4>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li>Default global hotkey <kbd class="key">Win</kbd> + <kbd class="key">J</kbd>, customizable in settings.</li>
+                  <li>Popup opens at your cursor, toggles closed on the next hotkey press, and can auto-close on focus loss.</li>
+                  <li>Auto-paste sends <kbd class="key">Ctrl</kbd> + <kbd class="key">V</kbd> to the previously focused window.</li>
+                </ul>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <h4 class="font-display font-700">📋 History and vault</h4>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li>Text and images are captured automatically with fast search.</li>
+                  <li>Private vault keeps sensitive items separate.</li>
+                  <li>Pinned items can stay only in the Pinned tab when you prefer a cleaner All tab.</li>
+                </ul>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <h4 class="font-display font-700">💾 Files and export</h4>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li>Save text or image items to a configurable folder.</li>
+                  <li>Files are sorted into <span class="font-mono text-xs">text/</span> and <span class="font-mono text-xs">images/</span> subfolders.</li>
+                  <li>Export all history to a ZIP archive in one click.</li>
+                </ul>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                <h4 class="font-display font-700">🔔 Tray, taskbar, and autostart</h4>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li>Tray icon with Show, Toggle, and Quit actions.</li>
+                  <li>Named-pipe IPC supports <span class="font-mono text-xs">clipd stop</span>, <span class="font-mono text-xs">clipd quit</span>, and <span class="font-mono text-xs">clipd toggle</span>.</li>
+                  <li>Taskbar mode, autostart on login, and embedded Windows version metadata.</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <div class="relative flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 dark:border-white/10 dark:bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p class="text-xs text-slate-500 dark:text-slate-400">This appears once per browser for this release. You can still use the download section any time.</p>
+          <button id="release-dismiss" type="button" class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-600 text-white transition hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-white dark:text-slate-900">Got it</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ============================ LIGHTBOX ============================ -->
   <div id="lightbox" hidden class="fixed inset-0 z-[80] grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Screenshot viewer">
@@ -629,6 +787,97 @@
       'use strict';
       var root = document.documentElement;
       var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var releaseStorageKey = 'clipd-release-notes-seen-v1.6.0-v2.0';
+
+      /* -------- first visit release notes -------- */
+      var releaseModal = document.getElementById('release-modal');
+      var releaseClose = document.getElementById('release-close');
+      var releaseDismiss = document.getElementById('release-dismiss');
+      var releaseTabs = Array.prototype.slice.call(document.querySelectorAll('[data-release-tab]'));
+      var releasePanels = Array.prototype.slice.call(document.querySelectorAll('[data-release-panel]'));
+      var releaseLastFocus = null;
+      var releaseActiveTab = 'release-tab inline-flex items-center gap-2 rounded-xl bg-brand-500/15 px-4 py-2 text-sm font-600 text-brand-700 ring-1 ring-brand-500/20 transition dark:text-brand-300';
+      var releaseIdleTab = 'release-tab inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-600 text-slate-500 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10';
+
+      function releaseSeen() {
+        try {
+          return localStorage.getItem(releaseStorageKey) === '1';
+        } catch (e) {
+          return document.cookie.indexOf(releaseStorageKey + '=1') !== -1;
+        }
+      }
+
+      function markReleaseSeen() {
+        try {
+          localStorage.setItem(releaseStorageKey, '1');
+        } catch (e) {
+          document.cookie = releaseStorageKey + '=1; max-age=31536000; path=/; SameSite=Lax';
+        }
+      }
+
+      function detectPlatform() {
+        var platform = '';
+        try {
+          platform = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '').toLowerCase();
+        } catch (e) {}
+        if (platform.indexOf('win') !== -1) return 'windows';
+        if (platform.indexOf('linux') !== -1 || platform.indexOf('x11') !== -1 || platform.indexOf('ubuntu') !== -1) return 'linux';
+        return 'linux';
+      }
+
+      function setReleaseTab(platform) {
+        releaseTabs.forEach(function (tab) {
+          var active = tab.getAttribute('data-release-tab') === platform;
+          tab.className = active ? releaseActiveTab : releaseIdleTab;
+          tab.setAttribute('aria-selected', String(active));
+          tab.setAttribute('tabindex', active ? '0' : '-1');
+        });
+        releasePanels.forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-release-panel') !== platform;
+        });
+      }
+
+      function openReleaseModal() {
+        if (!releaseModal || releaseSeen()) return;
+        releaseLastFocus = document.activeElement;
+        setReleaseTab(detectPlatform());
+        releaseModal.removeAttribute('hidden');
+        document.body.classList.add('modal-open');
+        setTimeout(function () {
+          var active = releaseTabs.filter(function (tab) { return tab.getAttribute('aria-selected') === 'true'; })[0];
+          if (active) active.focus();
+        }, 0);
+      }
+
+      function closeReleaseModal() {
+        if (!releaseModal || releaseModal.hasAttribute('hidden')) return;
+        markReleaseSeen();
+        releaseModal.setAttribute('hidden', '');
+        document.body.classList.remove('modal-open');
+        if (releaseLastFocus && releaseLastFocus.focus) releaseLastFocus.focus();
+      }
+
+      releaseTabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          setReleaseTab(tab.getAttribute('data-release-tab'));
+        });
+        tab.addEventListener('keydown', function (e) {
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          var index = releaseTabs.indexOf(tab);
+          var next = e.key === 'ArrowRight' ? (index + 1) % releaseTabs.length : (index - 1 + releaseTabs.length) % releaseTabs.length;
+          setReleaseTab(releaseTabs[next].getAttribute('data-release-tab'));
+          releaseTabs[next].focus();
+        });
+      });
+      if (releaseClose) releaseClose.addEventListener('click', closeReleaseModal);
+      if (releaseDismiss) releaseDismiss.addEventListener('click', closeReleaseModal);
+      if (releaseModal) {
+        releaseModal.addEventListener('click', function (e) {
+          if (e.target === releaseModal) closeReleaseModal();
+        });
+      }
+      openReleaseModal();
 
       /* -------- theme toggle -------- */
       var themeToggle = document.getElementById('theme-toggle');
@@ -766,6 +1015,7 @@
       lbClose.addEventListener('click', closeLightbox);
       lb.addEventListener('click', function (e) { if (e.target === lb) closeLightbox(); });
       document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && releaseModal && !releaseModal.hasAttribute('hidden')) closeReleaseModal();
         if (e.key === 'Escape' && !lb.hasAttribute('hidden')) closeLightbox();
       });
 

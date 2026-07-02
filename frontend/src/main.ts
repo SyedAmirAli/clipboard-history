@@ -11,7 +11,9 @@ import { createItemList } from "./components/itemList";
 import { createContextMenu } from "./components/itemContextMenu";
 import { createSettingsModal } from "./components/settingsModal";
 import { createConfirm } from "./components/confirmModal";
+import { createPrompt } from "./components/promptModal";
 import { createVaultPanel } from "./components/vaultPanel";
+import { createPreviewModal } from "./components/previewModal";
 import type { AppSettings, ClipItem } from "./types";
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -21,6 +23,7 @@ const els = {
     searchInput: $<HTMLInputElement>("#search"),
     list: $<HTMLElement>("#list"),
     vaultModal: $<HTMLElement>("#vault-modal"),
+    previewModal: $<HTMLElement>("#preview-modal"),
     chips: $<HTMLElement>("#chips"),
     ctxMenu: $<HTMLElement>("#ctx-menu"),
     settings: $<HTMLElement>("#settings-modal"),
@@ -30,6 +33,7 @@ const els = {
     openSettings: $<HTMLButtonElement>("#open-settings"),
     openVault: $<HTMLButtonElement>("#open-vault"),
     refreshList: $<HTMLButtonElement>("#refresh-list"),
+    exportZip: $<HTMLButtonElement>("#export-zip"),
     winClose: $<HTMLButtonElement>("#win-close"),
     winMin: $<HTMLButtonElement>("#win-min"),
     winMax: $<HTMLButtonElement>("#win-max"),
@@ -44,12 +48,36 @@ let activeFilter: Filter = "all";
 
 const search = createSearchBar(els.searchInput);
 const confirm = createConfirm(els.app, els.mainContent);
+const prompt = createPrompt(els.app, els.mainContent);
+
+// Vault export: ask for the vault PIN (verified server-side; also becomes
+// the ZIP password), then a save dialog picks the destination.
+async function doExportVault() {
+    const pin = await prompt.show({
+        title: "Export Private Vault",
+        message: "Enter your vault PIN/password. The ZIP will be encrypted with it — you'll need the same password to extract.",
+        placeholder: "Vault PIN or password",
+        confirmLabel: "Export",
+        password: true,
+    });
+    if (!pin) return;
+    nativeDialogOpen = true;
+    try {
+        const path = await api.exportVaultZip(pin);
+        if (path) flash(`Vault exported to ${path}`);
+    } catch (err) {
+        flash("Vault export failed: " + String(err));
+    } finally {
+        nativeDialogOpen = false;
+    }
+}
 const settings = createSettingsModal(els.settings, {
     load: () => api.getSettings(),
     save: async (s) => {
         const saved = await api.updateSettings(s);
         currentSettings = saved;
         settings.applyTheme(saved.theme);
+        applyFilter(); // pinned placement may have changed
         return saved;
     },
     clearAll: async (keep) => {
@@ -57,6 +85,8 @@ const settings = createSettingsModal(els.settings, {
         await refresh();
     },
     systemInfo: () => api.systemInfo(),
+    chooseDownloadDir: () => api.chooseDownloadDir(),
+    exportVault: doExportVault,
     chrome: { scrim: els.scrim, mainContent: els.mainContent },
     confirm,
 });
@@ -100,6 +130,38 @@ async function doDelete(item: ClipItem) {
     }
 }
 
+// While a native file dialog is up, the popup loses focus — suppress the
+// hide-on-blur behaviour so the window doesn't vanish under the dialog.
+let nativeDialogOpen = false;
+
+async function doDownload(item: ClipItem) {
+    nativeDialogOpen = true;
+    try {
+        const path = await api.downloadItem(item.id);
+        if (path) flash(`Saved to ${path}`);
+    } catch (err) {
+        flash("Download failed: " + String(err));
+    } finally {
+        nativeDialogOpen = false;
+    }
+}
+
+async function doExportZip() {
+    nativeDialogOpen = true;
+    try {
+        const path = await api.exportAllZip();
+        if (path) flash(`Exported to ${path}`);
+    } catch (err) {
+        flash("Export failed: " + String(err));
+    } finally {
+        nativeDialogOpen = false;
+    }
+}
+
+function doPreview(item: ClipItem) {
+    void previewModal.open(item);
+}
+
 async function doMoveToVault(item: ClipItem) {
     const unlocked = await vaultPanel.ensureUnlocked();
     if (!unlocked) return;
@@ -130,6 +192,13 @@ const vaultPanel = createVaultPanel(els.vaultModal, {
     chrome: { scrim: els.scrim, mainContent: els.mainContent },
 });
 
+const previewModal = createPreviewModal(els.previewModal, {
+    imageFor: (id) => api.getItemImage(id),
+    copy: doCopy,
+    download: doDownload,
+    chrome: { scrim: els.scrim, mainContent: els.mainContent },
+});
+
 const list = createItemList(els.list, {
     onPaste: doPaste,
     onCopy: doCopy,
@@ -138,6 +207,8 @@ const list = createItemList(els.list, {
         await refresh();
     },
     onMoveToVault: doMoveToVault,
+    onDownload: doDownload,
+    onPreview: doPreview,
     onDelete: doDelete,
     onContextMenu: (at, item) => ctxMenu.open(at, item),
 });
@@ -149,6 +220,8 @@ const ctxMenu = createContextMenu(els.ctxMenu, {
         await refresh();
     },
     onMoveToVault: doMoveToVault,
+    onPreview: doPreview,
+    onDownload: doDownload,
     onDelete: doDelete,
 });
 
@@ -162,6 +235,7 @@ search.onKeyToList((e) => list.handleKey(e));
 els.list.addEventListener("keydown", (e) => list.handleKey(e));
 
 els.openSettings.addEventListener("click", () => settings.open());
+els.exportZip.addEventListener("click", () => void doExportZip());
 els.openVault.addEventListener("click", () => vaultPanel.open());
 // The clipboard watcher runs in the separate clipd-watch process, so manual refresh re-reads
 // the DB on demand (the list also auto-refreshes whenever the popup is shown).
@@ -213,6 +287,7 @@ document.addEventListener("keydown", (e) => {
         if (confirm.isOpen()) return; // confirm dialog handles its own close
         if (settings.isOpen()) return; // overlay handles its own close
         if (vaultPanel.isOpen()) return; // overlay handles its own close
+        if (previewModal.isOpen()) return; // overlay handles its own close
         if (!els.ctxMenu.classList.contains("hidden")) return; // ctx menu closes itself
         api.hidePopup();
     } else if ((e.ctrlKey || e.metaKey) && e.key === ",") {
@@ -240,6 +315,8 @@ window.addEventListener("blur", () => {
     if (currentSettings?.hideOnBlur === false) return;
     if (settings.isOpen()) return;
     if (vaultPanel.isOpen()) return;
+    if (previewModal.isOpen()) return;
+    if (nativeDialogOpen) return;
     if (!els.ctxMenu.classList.contains("hidden")) return;
     if (!popupHadFocus) return; // never focused (Wayland) → this blur is spurious
     // Slight delay so click-to-paste flow finishes first; re-check focus in
@@ -275,7 +352,11 @@ async function refresh() {
 
 /** Apply the active chip filter on top of the backend search result. */
 function applyFilter() {
+    // When "Pinned items on top" is off, pinned entries live exclusively in
+    // the Pinned tab — hide them from All/Text/Images.
+    const pinnedOnTop = currentSettings?.pinnedOnTop ?? true;
     const visible = allItems.filter((it) => {
+        if (!pinnedOnTop && it.pinned && activeFilter !== "pinned") return false;
         switch (activeFilter) {
             case "text":
                 return it.contentType === "text";

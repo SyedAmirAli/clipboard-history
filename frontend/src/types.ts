@@ -28,6 +28,12 @@ export interface AppSettings {
   launchAtTop: boolean;
   windowFrame: boolean;
   autoPaste: boolean;
+  /** Where per-item downloads are saved. Empty = ask with a save dialog. */
+  downloadDir: string;
+  /** True: pinned items show in a group above the list. False: Pinned tab only. */
+  pinnedOnTop: boolean;
+  /** True: popup opens near the mouse pointer (popup mode). False: centered. */
+  popupAtCursor: boolean;
 }
 
 export interface SystemInfo {

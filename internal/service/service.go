@@ -485,6 +485,9 @@ func (s *Service) GetSettings() (clipboard.Settings, error) {
 	out.LaunchAtTop = get("launch_at_top", boolStr(def.LaunchAtTop)) == "1"
 	out.WindowFrame = get("window_frame", boolStr(def.WindowFrame)) == "1"
 	out.AutoPaste = get("auto_paste", boolStr(def.AutoPaste)) == "1"
+	out.DownloadDir = get("download_dir", def.DownloadDir)
+	out.PinnedOnTop = get("pinned_on_top", boolStr(def.PinnedOnTop)) == "1"
+	out.PopupAtCursor = get("popup_at_cursor", boolStr(def.PopupAtCursor)) == "1"
 	s.settingsLog.Store(out)
 	return out, nil
 }
@@ -541,6 +544,16 @@ func (s *Service) UpdateSettings(in clipboard.Settings) (clipboard.Settings, err
 		return prev, err
 	}
 	if err := put("auto_paste", boolStr(in.AutoPaste)); err != nil {
+		return prev, err
+	}
+	// Empty is a valid value here: it means "ask where to save every time".
+	if err := put("download_dir", in.DownloadDir); err != nil {
+		return prev, err
+	}
+	if err := put("pinned_on_top", boolStr(in.PinnedOnTop)); err != nil {
+		return prev, err
+	}
+	if err := put("popup_at_cursor", boolStr(in.PopupAtCursor)); err != nil {
 		return prev, err
 	}
 	if s.hotkeyMgr != nil && in.Hotkey != prev.Hotkey {
@@ -690,10 +703,14 @@ func (s *Service) ShowPopup() {
 	wailsruntime.WindowUnminimise(s.ctx) // restore if minimised to the taskbar
 	// In windowed mode the user owns the window position and stacking, so we
 	// don't force always-on-top or re-center on every summon. In popup mode
-	// we keep the classic Windows+V behaviour: float on top, centered.
-	if !s.CurrentSettings().WindowFrame {
+	// we keep the classic Windows+V behaviour: float on top — near the mouse
+	// pointer when possible (best proxy for the focused input field, and
+	// automatically the right monitor on multi-head setups), else centered.
+	if settings := s.CurrentSettings(); !settings.WindowFrame {
 		wailsruntime.WindowSetAlwaysOnTop(s.ctx, true)
-		wailsruntime.WindowCenter(s.ctx)
+		if !settings.PopupAtCursor || !s.positionNearCursor() {
+			wailsruntime.WindowCenter(s.ctx)
+		}
 	}
 	// A programmatic show gets no input timestamp, so GNOME denies focus and
 	// flags the window "demands attention" — which pulses the dock icon and
@@ -701,13 +718,41 @@ func (s *Service) ShowPopup() {
 	// mapped clears that flag and hands the popup keyboard focus.
 	go func() {
 		time.Sleep(120 * time.Millisecond)
-		x11hint.Nudge()
+		// Only re-apply the skip-taskbar/utility hints in popup mode; in
+		// windowed mode they would strip the taskbar entry and break minimise.
+		settings := s.CurrentSettings()
+		x11hint.Nudge(!settings.WindowFrame)
+		// Re-apply cursor placement once the window is definitely mapped —
+		// a move issued in the same tick as the first map can be dropped.
+		if !settings.WindowFrame && settings.PopupAtCursor {
+			s.positionNearCursor()
+		}
 	}()
 	// The clipboard watcher runs in the separate clipd-watch process, so this GUI
 	// doesn't learn about new items live. Refresh the list every time the popup
 	// is shown so it reflects whatever the worker has captured.
 	s.emitNewItem()
 	s.visible.Store(true)
+}
+
+// positionNearCursor moves the popup next to the mouse pointer, fully inside
+// the pointer's monitor (flipping above / sliding left near screen edges).
+// Returns false when placement isn't possible (Wayland-native window, no
+// xdotool, …) so the caller can fall back to centering.
+func (s *Service) positionNearCursor() bool {
+	if !x11hint.CanPosition() {
+		return false
+	}
+	w, h := wailsruntime.WindowGetSize(s.ctx)
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	x, y, ok := x11hint.PopupPosition(w, h)
+	if !ok {
+		return false
+	}
+	wailsruntime.WindowSetPosition(s.ctx, x, y)
+	return true
 }
 
 // HidePopup hides the popup window.

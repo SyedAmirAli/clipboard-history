@@ -10,6 +10,11 @@ const SVG_EDIT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const SVG_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
 const SVG_CLOSE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`;
 
+// Leading input icons — the sign-in view renders these inline; the setup and
+// reset forms use the same slot (the input reserves 34px of left padding).
+const ICON_KEY = `<svg class="vault-signin-input-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>`;
+const ICON_PHONE = `<svg class="vault-signin-input-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>`;
+
 function renderPasswordField(opts: {
   field: string;
   label: string;
@@ -24,6 +29,7 @@ function renderPasswordField(opts: {
     <label class="vault-field">
       <span class="vault-field-label">${opts.label}</span>
       <div class="vault-signin-input-wrap has-trailing">
+        ${ICON_KEY}
         <input
           class="vault-signin-input vault-input"
           type="${opts.visible ? "text" : "password"}"
@@ -60,6 +66,7 @@ function renderLabeledField(opts: {
     <label class="vault-field">
       <span class="vault-field-label">${opts.label}</span>
       <div class="vault-signin-input-wrap">
+        ${ICON_PHONE}
         <input
           class="vault-signin-input vault-input"
           type="${opts.type ?? "text"}"

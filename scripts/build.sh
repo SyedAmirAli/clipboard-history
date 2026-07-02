@@ -50,7 +50,9 @@ if [[ "${1:-}" == "deb" ]]; then
   fi
   mkdir -p dist
   echo "==> Packaging .deb"
-  nfpm pkg --packager deb --config nfpm.yaml --target dist/
+  # nfpm.yaml references ${VERSION}; nfpm expands env vars in its config, so
+  # the package version always matches wails.json's productVersion.
+  VERSION="${VERSION}" nfpm pkg --packager deb --config nfpm.yaml --target dist/
   echo "==> Package:"
   ls -lh dist/*.deb | awk '{print "    " $5 "  " $9}'
 fi

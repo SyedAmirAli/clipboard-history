@@ -41,6 +41,12 @@ declare global {
           RevealVaultItem(id: number): Promise<VaultSecret>;
           UpdateVaultItemTitle(id: number, title: string): Promise<void>;
           DeleteVaultItem(id: number): Promise<void>;
+          GetItemImage(id: number): Promise<string>;
+          DownloadItem(id: number): Promise<string>;
+          ExportAllZip(): Promise<string>;
+          ExportVaultZip(pin: string): Promise<string>;
+          ChooseDownloadDir(): Promise<string>;
+          MinimizeWindow(): Promise<void>;
           GetSettings(): Promise<AppSettings>;
           UpdateSettings(s: AppSettings): Promise<AppSettings>;
           ShowPopup(): Promise<void>;
@@ -155,8 +161,34 @@ export const api = {
   hidePopup(): Promise<void> {
     return svc().HidePopup();
   },
+  /** Full-resolution image data URL for the preview modal. */
+  getItemImage(id: number): Promise<string> {
+    return svc().GetItemImage(id);
+  },
+  /** Save one item to disk; resolves to the saved path ("" if cancelled). */
+  downloadItem(id: number): Promise<string> {
+    return svc().DownloadItem(id);
+  },
+  /** Export the whole history to a zip; resolves to the path ("" if cancelled). */
+  exportAllZip(): Promise<string> {
+    return svc().ExportAllZip();
+  },
+  /**
+   * Export the private vault as a password-protected zip. The PIN is
+   * verified against the vault and used as the archive password.
+   * Resolves to the saved path ("" if the save dialog was cancelled).
+   */
+  exportVaultZip(pin: string): Promise<string> {
+    return svc().ExportVaultZip(pin);
+  },
+  /** Native folder picker; resolves to the chosen dir ("" if cancelled). */
+  chooseDownloadDir(): Promise<string> {
+    return svc().ChooseDownloadDir();
+  },
   minimizeWindow(): void {
-    window.runtime?.WindowMinimise();
+    // Go-side handles mode: minimise in windowed mode, hide in popup mode
+    // (a skip-taskbar popup has no taskbar entry to restore from).
+    void svc().MinimizeWindow();
   },
   toggleMaximizeWindow(): void {
     window.runtime?.WindowToggleMaximise();

@@ -18,6 +18,8 @@ export interface SettingsModalDeps {
   save: (s: AppSettings) => Promise<AppSettings>;
   clearAll: (keepPinned: boolean) => Promise<void>;
   systemInfo: () => Promise<SystemInfo>;
+  chooseDownloadDir: () => Promise<string>;
+  exportVault: () => Promise<void>;
   chrome: SettingsChrome;
   confirm: ConfirmDialog;
 }
@@ -164,9 +166,33 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
           ${stepperHtml('s-max-items', s.maxItems)}
         </div>
         ${switchRow('keepImages', s.keepImages, 'Capture images', 'Store PNG screenshots in history')}
+        ${switchRow('pinnedOnTop', s.pinnedOnTop, 'Pinned items on top', 'On: pinned items show in a group above the list. Off: they appear only in the Pinned tab.')}
         <div class="s-row">
           <div class="s-info"><div class="s-lbl">Max image size (MB)</div></div>
           ${stepperHtml('s-max-mb', s.maxImageMB)}
+        </div>
+
+        <div class="s-section">Downloads</div>
+        <div class="s-field">
+          <div class="s-lbl">Download folder</div>
+          <div class="dl-dir-row">
+            <div class="dl-dir-path ${s.downloadDir ? '' : 'empty'}" data-role="downloadDir"
+                 title="${escapeHtml(s.downloadDir || '')}">${
+                   s.downloadDir ? escapeHtml(s.downloadDir) : 'Ask where to save each time'
+                 }</div>
+            <button class="s-btn small" data-action="choose-dl-dir">Choose…</button>
+            <button class="s-btn small" data-action="clear-dl-dir" ${s.downloadDir ? '' : 'disabled'}>Clear</button>
+          </div>
+          <div class="s-hint">Item downloads are saved here. When unset, a save dialog asks every time.</div>
+        </div>
+
+        <div class="s-section">Private Vault</div>
+        <div class="s-row">
+          <div class="s-info">
+            <div class="s-lbl">Export vault backup</div>
+            <div class="s-hint">Saves all vault entries as a ZIP encrypted with your vault PIN/password. Extract with 7-Zip or any AES-capable tool.</div>
+          </div>
+          <button class="s-btn small" data-action="export-vault">Export…</button>
         </div>
 
         <div class="s-section">Appearance</div>
@@ -181,6 +207,7 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
 
         <div class="s-section">Behaviour</div>
         ${switchRow('hideOnBlur', s.hideOnBlur, 'Hide on focus loss', 'Auto-close popup when clicked away')}
+        ${switchRow('popupAtCursor', s.popupAtCursor, 'Open near cursor', 'Popup appears next to the mouse pointer on the same monitor, kept fully on-screen. Off: opens centered. (Popup mode only)')}
         ${switchRow('launchAtTop', s.launchAtTop, 'Launch at screen top', 'Position the popup near the top of the screen')}
         ${switchRow('autoPaste', s.autoPaste, 'Auto-paste on select', 'Paste straight into the focused field (sends Ctrl+V via xdotool)')}
         ${switchRow('windowFrame', s.windowFrame, 'Taskbar window', 'On: a normal window with a taskbar entry. Off: floating always-on-top popup that hides on focus loss. Restart to apply.')}
@@ -275,6 +302,31 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
       }
     });
 
+    // Download folder chooser
+    const dlPathEl = root.querySelector<HTMLElement>('[data-role="downloadDir"]')!;
+    const dlClearBtn = root.querySelector<HTMLButtonElement>('[data-action="clear-dl-dir"]')!;
+    const setDlDir = (dir: string) => {
+      if (current) current.downloadDir = dir;
+      dlPathEl.textContent = dir || 'Ask where to save each time';
+      dlPathEl.title = dir;
+      dlPathEl.classList.toggle('empty', !dir);
+      dlClearBtn.disabled = !dir;
+    };
+    root.querySelector<HTMLButtonElement>('[data-action="choose-dl-dir"]')!.addEventListener('click', async () => {
+      try {
+        const dir = await deps.chooseDownloadDir();
+        if (dir) setDlDir(dir);
+      } catch (err) {
+        alert('Could not open folder picker: ' + String(err));
+      }
+    });
+    dlClearBtn.addEventListener('click', () => setDlDir(''));
+
+    // Vault export (password prompt + save dialog handled by the caller)
+    root.querySelector<HTMLButtonElement>('[data-action="export-vault"]')!.addEventListener('click', () => {
+      void deps.exportVault();
+    });
+
     // Footer actions
     root.querySelector<HTMLButtonElement>('[data-action="cancel"]')!.addEventListener('click', cancel);
 
@@ -299,7 +351,9 @@ export function createSettingsModal(root: HTMLElement, deps: SettingsModalDeps):
         maxImageMB: Number((root.querySelector('#s-max-mb') as HTMLInputElement).value) || current.maxImageMB,
         theme: (themeOpt?.dataset.val as AppSettings['theme']) ?? current.theme,
         keepImages: roleOn('keepImages'),
+        pinnedOnTop: roleOn('pinnedOnTop'),
         hideOnBlur: roleOn('hideOnBlur'),
+        popupAtCursor: roleOn('popupAtCursor'),
         launchAtTop: roleOn('launchAtTop'),
         autoPaste: roleOn('autoPaste'),
         windowFrame: roleOn('windowFrame'),

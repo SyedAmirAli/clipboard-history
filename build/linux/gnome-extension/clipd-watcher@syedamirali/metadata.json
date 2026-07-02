@@ -1,7 +1,9 @@
 {
   "uuid": "clipd-watcher@syedamirali",
   "name": "clipd Clipboard Watcher",
-  "description": "Captures GNOME Shell clipboard text changes into clipd's SQLite database.",
-  "shell-version": ["50"],
-  "version": 1
+  "description": "Captures GNOME Shell clipboard text and image changes into clipd's SQLite database.",
+  "shell-version": [
+    "50"
+  ],
+  "version": 2
 }

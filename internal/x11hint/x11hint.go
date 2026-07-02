@@ -84,13 +84,20 @@ func SuppressTaskbar() {
 // it so the popup gets keyboard focus immediately. Called shortly after each
 // show. The skip-taskbar mark from SuppressTaskbar already prevents the toast;
 // this just keeps focus behaviour right. No-op off X11.
-func Nudge() {
+//
+// markSkip controls whether the skip-taskbar/utility hints are (re)applied:
+// popup mode wants them, but windowed mode must NOT get them — a utility
+// skip-taskbar window can't be minimised on GNOME, which is what broke the
+// yellow titlebar button.
+func Nudge(markSkip bool) {
 	if !underX11() {
 		return
 	}
 	ids := findWindows()
-	for _, id := range ids {
-		mark(id)
+	if markSkip {
+		for _, id := range ids {
+			mark(id)
+		}
 	}
 	if n := len(ids); n > 0 {
 		_ = exec.Command("xdotool", "windowactivate", ids[n-1]).Run()

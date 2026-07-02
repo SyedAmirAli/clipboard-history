@@ -299,6 +299,33 @@ textarea {
 #search::placeholder {
   color: var(--text-soft);
 }
+.search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--transition), color var(--transition);
+}
+.search-clear:hover {
+  background: var(--surface-active);
+  color: var(--text);
+}
+.search-clear svg {
+  width: 11px;
+  height: 11px;
+  pointer-events: none;
+}
+.search-clear.hidden {
+  display: none;
+}
 
 /* Generic icon button */
 .iconbtn {

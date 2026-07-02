@@ -19,7 +19,18 @@ export function createSearchBar(input: HTMLInputElement, debounceMs = 100): Sear
   let keyCb: (e: KeyboardEvent) => void = () => {};
   let t: number | undefined;
 
+  // Clear (✕) button, shown only while the input has text.
+  const clearBtn = document.getElementById('search-clear');
+  const syncClear = () => clearBtn?.classList.toggle('hidden', input.value === '');
+  clearBtn?.addEventListener('click', () => {
+    input.value = '';
+    syncClear();
+    changeCb('');
+    input.focus();
+  });
+
   input.addEventListener('input', () => {
+    syncClear();
     if (t) clearTimeout(t);
     t = window.setTimeout(() => changeCb(input.value), debounceMs);
   });
@@ -36,6 +47,7 @@ export function createSearchBar(input: HTMLInputElement, debounceMs = 100): Sear
     value: () => input.value,
     setValue(v: string) {
       input.value = v;
+      syncClear();
       changeCb(v);
     },
     focus() {

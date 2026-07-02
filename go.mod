@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	fyne.io/systray v1.12.1
+	github.com/alexmullins/zip v0.0.0-20180717182244-4affb64b04d0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/wailsapp/wails/v2 v2.12.0
 	modernc.org/sqlite v1.51.0

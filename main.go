@@ -384,7 +384,12 @@ func (a *appWiring) onStartup(ctx context.Context) {
 	// map — this is what actually stops GNOME's "wl-clipboard is ready" toast
 	// and the dock/taskbar blinking (windowAttentionHandler ignores
 	// skip-taskbar windows), and removes the taskbar entry entirely.
-	x11hint.SuppressTaskbar()
+	// Popup mode only: in windowed ("taskbar window") mode the user wants a
+	// taskbar entry, and the skip-taskbar/utility hints also make GNOME refuse
+	// to minimise the window (broken yellow button).
+	if !settings.WindowFrame {
+		x11hint.SuppressTaskbar()
+	}
 
 	tray.Start(tray.Callbacks{
 		OnOpen:     a.svc.ShowPopup,

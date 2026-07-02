@@ -45,6 +45,18 @@ type Settings struct {
 	// window after an item is selected, so the value is pasted automatically
 	// (requires xdotool).
 	AutoPaste bool `json:"autoPaste"`
+	// DownloadDir is where per-item downloads are saved. Empty means "ask
+	// with a save dialog every time".
+	DownloadDir string `json:"downloadDir"`
+	// PinnedOnTop, when true (default), shows pinned items in a "Pinned"
+	// group above the recent list. When false, pinned items appear only in
+	// the Pinned filter tab.
+	PinnedOnTop bool `json:"pinnedOnTop"`
+	// PopupAtCursor, when true (default), opens the popup next to the mouse
+	// pointer — on the pointer's monitor, clamped fully on-screen. When
+	// false (or when placement isn't possible), the popup opens centered.
+	// Popup mode only; windowed mode never repositions.
+	PopupAtCursor bool `json:"popupAtCursor"`
 }
 
 // DefaultSettings returns the baseline settings used on first run.
@@ -57,7 +69,9 @@ func DefaultSettings() Settings {
 		Theme:       "auto",
 		HideOnBlur:  true,
 		LaunchAtTop: false,
-		WindowFrame: true,
-		AutoPaste:   true,
+		WindowFrame:   true,
+		AutoPaste:     true,
+		PinnedOnTop:   true,
+		PopupAtCursor: true,
 	}
 }

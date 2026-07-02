@@ -190,6 +190,37 @@ func (s *Store) GetFull(id int64) (FullItem, error) {
 	return out, nil
 }
 
+// ListAllFull returns every history row including image blobs, ordered
+// pinned-first then most-recently-used. Used by the "export everything as a
+// zip" feature, which needs the full payloads.
+func (s *Store) ListAllFull() ([]FullItem, error) {
+	rows, err := s.db.Query(`
+		SELECT id, content_type, text_content, image_blob, COALESCE(image_thumb,''),
+		       image_w, image_h, content_hash, pinned, created_at, last_used_at
+		FROM items
+		ORDER BY pinned DESC, last_used_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list full query: %w", err)
+	}
+	defer rows.Close()
+	var out []FullItem
+	for rows.Next() {
+		var it FullItem
+		var pinned int
+		var text sql.NullString
+		if err := rows.Scan(&it.Item.ID, &it.Item.ContentType, &text, &it.ImageBlob, &it.Item.ImageThumb,
+			&it.Item.ImageW, &it.Item.ImageH, &it.Item.ContentHash, &pinned, &it.Item.CreatedAt, &it.Item.LastUsedAt); err != nil {
+			return nil, fmt.Errorf("scan full: %w", err)
+		}
+		it.Item.TextContent = text.String
+		it.Item.Pinned = pinned == 1
+		it.Item.Preview = makePreview(it.Item)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
 // SetPinned toggles the pinned flag for a row.
 func (s *Store) SetPinned(id int64, pinned bool) error {
 	v := 0

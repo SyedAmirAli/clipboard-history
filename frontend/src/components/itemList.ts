@@ -15,12 +15,15 @@ const SVG_COPY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const SVG_DELETE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>`;
 const SVG_EMPTY = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1" ry="1"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg>`;
 const SVG_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+const SVG_DOWNLOAD = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 
 export interface ItemListActions {
     onPaste(item: ClipItem): void;
     onCopy(item: ClipItem): void;
     onPinToggle(item: ClipItem): void;
     onMoveToVault(item: ClipItem): void;
+    onDownload(item: ClipItem): void;
+    onPreview(item: ClipItem): void;
     onDelete(item: ClipItem): void;
     onContextMenu(at: { x: number; y: number }, item: ClipItem): void;
 }
@@ -90,7 +93,7 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
         return `
       <div class="item ${isImage ? "kind-image" : "kind-text"} ${it.pinned ? "pinned" : ""}"
            data-idx="${idx}" role="button" tabindex="-1">
-        <div class="item-icon">${iconHtml}</div>
+        <button class="item-icon preview-btn" title="Preview" aria-label="Preview">${iconHtml}</button>
         <div class="item-main">
           <div class="item-preview">${preview}</div>
           <div class="item-meta">${meta}</div>
@@ -100,6 +103,7 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
             ${pinHtml}
             <button class="ab copy-btn" title="Copy">${SVG_COPY}</button>
             <button class="ab vault-btn" title="Move to Vault">${SVG_LOCK}</button>
+            <button class="ab dl-btn" title="Download">${SVG_DOWNLOAD}</button>
             <button class="ab danger del-btn" title="Delete">${SVG_DELETE}</button>
           </div>
         </div>
@@ -152,6 +156,16 @@ export function createItemList(root: HTMLElement, actions: ItemListActions): Ite
         }
         if (target.closest(".vault-btn")) {
             actions.onMoveToVault(item);
+            return;
+        }
+        if (target.closest(".dl-btn")) {
+            actions.onDownload(item);
+            return;
+        }
+        // Left icon = preview button: opens the large preview modal instead
+        // of pasting.
+        if (target.closest(".preview-btn")) {
+            actions.onPreview(item);
             return;
         }
         // Click was somewhere in the action/marker zone but not on a button:

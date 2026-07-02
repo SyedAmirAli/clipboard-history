@@ -8,7 +8,9 @@
 name: clipd
 arch: amd64
 platform: linux
-version: "1.1.23"
+# Injected by scripts/build.sh from wails.json's productVersion — the single
+# source of truth for the release version. Don't hardcode it here.
+version: "${VERSION}"
 section: utils
 priority: optional
 maintainer: "Syed Amir Ali <sywmohammadamir@gmail.com>"
